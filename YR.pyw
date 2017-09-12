@@ -24,6 +24,22 @@ GlobalVideoIdForRelated = ""
 GlobalIfNowDownloading = 0
 api_key = #ENTER YOUR API KEY HERE
 
+class RelateFromHistoryRecommender():
+    def __init__(self,parent):
+        self.base_random_video_id = ""
+        self.currentRecommendVideoId = ""
+        self.parent = parent
+    def AnalyzeHistoryFileAndGetRandomVideo(self):
+        content = list()
+        with open("./all_played_videos.txt") as f:
+            content = f.readlines()
+        shuffle(content)
+        self.base_random_video_id = content[0].replace("https://www.youtube.com/watch?v=","").replace("\n","")
+    def GetRecommendedVideoId(self):
+        self.AnalyzeHistoryFileAndGetRandomVideo()
+        videoIds = self.parent.GetRelatedIds(self.parent.RequestRelatedVideosDictByVideoWithId(self.base_random_video_id))
+        shuffle(videoIds)
+        return videoIds[0]
 class ClarifayTagger():
     def __init__(self,parent):
         self.parent = parent
@@ -66,6 +82,7 @@ class MyYouTubeSearcher():
         self.number_of_found_videos = 0
         self.temp_future_filename = ""
         self.MyClarifaiTaggerObj = ClarifayTagger(self)
+        self.RelateFromHistoryRecommenderObj = RelateFromHistoryRecommender(self)
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
@@ -116,21 +133,25 @@ class MyYouTubeSearcher():
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
-    def LoadRelatedVideos(self):
-        self.related_videos = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+self.GetCurrentVideoId()+"&maxResults=6&type=video&key="+api_key
+    def RequestRelatedVideosDictByVideoWithId(self,videoId):
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults=6&type=video&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
-        self.related_videos = json.loads(content)
+        return json.loads(content)
+    def LoadRelatedVideos(self):
+        self.related_videos = dict()
+        self.related_videos = self.RequestRelatedVideosDictByVideoWithId(self.GetCurrentVideoId())
         self.SaveRelatedThumbs()
         self.parent.RefreshRelatedThumbs()
-    def GetRelatedIds(self):
-        if(len(self.related_videos)==0):
+    def GetRelatedIds(self,related_videos_dict):
+        if related_videos_dict == None:
+            related_videos_dict = self.related_videos
+        if(len(related_videos_dict)==0):
             return list()
         list_to_return = list()
         i = 0
-        while(i<len(self.related_videos["items"])):
-            list_to_return.append(self.related_videos["items"][i]["id"]["videoId"])
+        while(i<len(related_videos_dict["items"])):
+            list_to_return.append(related_videos_dict["items"][i]["id"]["videoId"])
             i+=1
         return list_to_return
     def GetDuration(self):
@@ -169,7 +190,7 @@ class MyYouTubeSearcher():
     def SaveRelatedThumbs(self):
         self.ClearRelatedThubms()
         self.parent.statusbar.SetStatusText('Fetching images...',1)
-        related_ids = self.GetRelatedIds()
+        related_ids = self.GetRelatedIds(None)
         for related_id in related_ids:
             for i in range(3):
                 local_address = "./related_images/"+related_id+"-"+str(i)+".jpg"
@@ -343,6 +364,7 @@ class MyFrame(wx.Frame):
         self.sizer5 = wx.BoxSizer(wx.HORIZONTAL)
         self.thumblails_sizer_l = wx.BoxSizer(wx.VERTICAL)
         self.thumblails_sizer_r = wx.BoxSizer(wx.VERTICAL)
+        self.history_and_recommendator_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
 
 
@@ -369,6 +391,7 @@ class MyFrame(wx.Frame):
         self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
         self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
         self.history_btn = wx.Button(self.panel, -1, "History mode")
+        self.recommend_btn = wx.Button(self.panel, -1, "Recommended for you")
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -411,6 +434,7 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_TEXT_ENTER, self.OnSmartButton, self.search_text)
         self.Bind(wx.EVT_BUTTON, self.OnSearchByThumbnailButton, self.search_by_thumbnail_btn)
         self.Bind(wx.EVT_CHECKBOX, self.OnChangeCheckboxRandomSearch, self.check_random_search)
+        self.Bind(wx.EVT_BUTTON, self.OnRecommendButtonPressed, self.recommend_btn)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -433,7 +457,9 @@ class MyFrame(wx.Frame):
         self.left_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
         self.left_sizer.Add(self.sizer2)
         self.left_sizer.Add(self.left_sizer1)
-        self.left_sizer.Add(self.history_btn, 0, wx.ALL, 10)
+        self.history_and_recommendator_sizer.Add(self.history_btn, 0, wx.ALL, 10)
+        self.history_and_recommendator_sizer.Add(self.recommend_btn, 0, wx.ALL, 10)
+        self.left_sizer.Add(self.history_and_recommendator_sizer)
         self.left_sizer1.Add(self.thumblails_sizer_l, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer1.Add(self.thumblails_sizer_r, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.text, 0, wx.ALL, 10)
@@ -462,6 +488,10 @@ class MyFrame(wx.Frame):
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
+    def OnRecommendButtonPressed(self,evt):
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = self.MyYouTubeSearcherObj.RelateFromHistoryRecommenderObj.GetRecommendedVideoId()
+        self.RefreshSongInfo()
     def OnChangeCheckboxRandomSearch(self,evt):
         if self.check_random_search.GetValue() == 1:
             self.user_input_backup = self.search_text.GetValue()
@@ -478,6 +508,8 @@ class MyFrame(wx.Frame):
     def OnChangeIndex(self,evt):
         self.ChangeIndex(self.index_info_edit.GetValue())
     def OnStartHistoryMode(self,evt):
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = ""
         global GlobalIfNowDownloading
         #self.history_btn.Disable()
         self.HistoryStuffObj.ReadHistoryFromFile()
@@ -492,7 +524,7 @@ class MyFrame(wx.Frame):
         for bitmap in self.sBitMaps:
             bitmap.SetBitmap(wx.Bitmap("no_small.png",wx.BITMAP_TYPE_ANY))
     def RefreshRelatedThumbs(self):
-        ids = self.MyYouTubeSearcherObj.GetRelatedIds()
+        ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         i = 0
         self.UnloadRelatedThumbs()
         for my_id in ids:
@@ -506,7 +538,7 @@ class MyFrame(wx.Frame):
         t1.start()
     def ThumbnailLoopUpdater(self):
         bitmapId = self.related_thumbnail_id_updater_thread
-        ids = self.MyYouTubeSearcherObj.GetRelatedIds()
+        ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         k = self.related_thumbnails_current_indexes[bitmapId]
         while(self.related_thumbnail_updater_thread_is_running):
             k+=1
@@ -521,7 +553,7 @@ class MyFrame(wx.Frame):
                     return
                 time.sleep(0.001)
     def OnHoverThumbnail(self, id):
-        ids = self.MyYouTubeSearcherObj.GetRelatedIds()
+        ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         if(len(ids)>id):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(ids[id]))
             self.related_thumbnail_updater_thread_is_running = 1
@@ -531,7 +563,7 @@ class MyFrame(wx.Frame):
         self.related_thumbnail_updater_thread_is_running = 0
     def OnClickThumbnail(self, id):
         global GlobalVideoIdForRelated
-        ids = self.MyYouTubeSearcherObj.GetRelatedIds()
+        ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         if(len(ids)>id):
             GlobalVideoIdForRelated = ids[id]
             self.RefreshSongInfo()
@@ -561,6 +593,8 @@ class MyFrame(wx.Frame):
         self.Destroy()
 
     def OnSmartButton(self, evt):
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = ""
         self.HistoryStuffObj.EnableDisableHistoryMode(0)
         self.text.SetLabel("Searching...")
         self.duration_info.SetLabel("unavailable")
@@ -597,8 +631,6 @@ class MyFrame(wx.Frame):
         t1.daemon = True
         t1.start()
     def RefreshPrevAndNextButtons(self):
-        global GlobalVideoIdForRelated
-        GlobalVideoIdForRelated = ""
         if self.HistoryStuffObj.CheckIfInHistoryMode():
             number_of_elements = self.HistoryStuffObj.GetSizeOfHistory()
             current_index = self.HistoryStuffObj.GetIndex()
@@ -697,7 +729,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.AppendToHistoryFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.00")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.10")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
