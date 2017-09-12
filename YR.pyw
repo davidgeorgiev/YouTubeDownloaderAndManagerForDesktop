@@ -60,23 +60,27 @@ class MyYouTubeSearcher():
         self.found_ids = dict()
         splitted_content = dict()
         my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=20&type=video&key="+api_key
+        #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
         self.number_of_found_videos = len(self.data_info[u"items"])
         self.parent.statusbar.SetStatusText('Done',1)
     def LoadStatisticsAndInformation(self):
         self.full_data_info = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_key+"&fields=items(id,snippet(channelId,title,categoryId),statistics)&part=snippet,statistics"
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_key+"&fields=items(id,snippet(channelId,title,description,categoryId),statistics)&part=snippet,statistics"
+        #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.full_data_info = json.loads(content)
     def LoadContentDetails(self):
         self.content_details = dict()
         my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&key="+api_key
+        #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
     def LoadRelatedVideos(self):
         self.related_videos = dict()
         my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+self.GetCurrentVideoId()+"&maxResults=6&type=video&key="+api_key
+        #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.related_videos = json.loads(content)
         self.SaveRelatedThumbs()
@@ -507,6 +511,8 @@ class MyFrame(wx.Frame):
             self.HistoryStuffObj.DecrementIndex()
         else:
             self.MyYouTubeSearcherObj.DecrementIndex()
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = ""
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
     def ChangeIndex(self,new_index):
@@ -514,6 +520,8 @@ class MyFrame(wx.Frame):
             self.HistoryStuffObj.SetIndex(int(new_index))
         else:
             self.MyYouTubeSearcherObj.SetIndex(int(new_index))
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = ""
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
     def NextSong(self, evt):
@@ -521,6 +529,8 @@ class MyFrame(wx.Frame):
             self.HistoryStuffObj.IncrementIndex()
         else:
             self.MyYouTubeSearcherObj.IncrementIndex()
+        global GlobalVideoIdForRelated
+        GlobalVideoIdForRelated = ""
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
     def RefreshSongInfo(self):
@@ -541,7 +551,7 @@ class MyFrame(wx.Frame):
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
     def RunTimer(self):
-        title = self.MyYouTubeSearcherObj.GetTitle()
+        title = self.MyYouTubeSearcherObj.temp_future_filename
         dots = ""
         if(len(title)>30):
             dots = "..."
