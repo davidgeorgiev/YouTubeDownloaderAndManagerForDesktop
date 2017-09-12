@@ -1,3 +1,5 @@
+#CLARIFAI_API_KEY= dcce059832e249099d4db63efff8554d
+
 import wx
 import wx.html2
 import urllib2
@@ -10,12 +12,48 @@ import time
 import webbrowser
 import os.path
 import isodate
+from clarifai.rest import ClarifaiApp
+from random import shuffle
+from random import randint
+import unicodedata
+import warnings
+warnings.filterwarnings('ignore')
+
 GlobalSmartThreadRuning = 0
 GlobalVideoIdForRelated = ""
 GlobalIfNowDownloading = 0
-
 api_key = #ENTER YOUR API KEY HERE
 
+class ClarifayTagger():
+    def __init__(self,parent):
+        self.parent = parent
+        self.last_tags = list()
+    def UpdateTags(self,arg_url):
+        self.parent.parent.statusbar.SetStatusText("Getting tags for thumbnail with clarifai",1)
+        tags = list()
+        app = ClarifaiApp()
+        model = app.models.get('general-v1.3')
+        response = model.predict_by_url(url=arg_url)
+        concepts = response['outputs'][0]['data']['concepts']
+        for concept in concepts:
+            tags.append(concept['name'])
+            self.last_tags = tags
+        self.parent.parent.statusbar.SetStatusText("Done",1)
+    def GetLastTags(self):
+        return self.last_tags
+    def GetRandomTagsWithAmount(self,amount):
+        tags = self.last_tags
+        shuffle(tags)
+        return tags[:amount]
+    def GetTagsWithAmount(self,amount):
+        tags = self.last_tags
+        return tags[:amount]
+    def GetStringOfTags(self):
+        return " ".join(self.last_tags)
+    def GetStringOfRandomTagsWithAmount(self,amount):
+        return " ".join(self.GetRandomTagsWithAmount(amount))
+    def GetStringOfTagsWithAmount(self,amount):
+        return " ".join(self.GetTagsWithAmount(amount))
 class MyYouTubeSearcher():
     def __init__(self,parent):
         self.index = 0
@@ -27,6 +65,7 @@ class MyYouTubeSearcher():
         self.ext = 'mp3'
         self.number_of_found_videos = 0
         self.temp_future_filename = ""
+        self.MyClarifaiTaggerObj = ClarifayTagger(self)
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
@@ -67,7 +106,7 @@ class MyYouTubeSearcher():
         self.parent.statusbar.SetStatusText('Done',1)
     def LoadStatisticsAndInformation(self):
         self.full_data_info = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_key+"&fields=items(id,snippet(channelId,title,description,categoryId),statistics)&part=snippet,statistics"
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_key+"&fields=items(id,snippet(publishedAt,channelId,title,description,categoryId),statistics)&part=snippet,statistics"
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.full_data_info = json.loads(content)
@@ -98,7 +137,11 @@ class MyYouTubeSearcher():
         duration_str = self.content_details["items"][0]["contentDetails"]["duration"]
         dur=isodate.parse_duration(duration_str)
         return str(int(dur.total_seconds()))
+    def GetPublishedAt(self):
+        return str(isodate.parse_datetime(self.full_data_info["items"][0]["snippet"]["publishedAt"])).split("+")[0]
     def GetTitleFromId(self,id):
+        if id=="":
+            id = self.GetCurrentVideoId()
         info = dict()
         url = 'https://www.googleapis.com/youtube/v3/videos?id='+id+'&key='+api_key+'&fields=items(snippet(title))&part=snippet'
         content = urllib2.urlopen(url).read()
@@ -108,9 +151,16 @@ class MyYouTubeSearcher():
         return str(re.sub('[^A-Za-z0-9]+', ' ', self.full_data_info["items"][0]["snippet"]["title"]))
     def GetNumberOfFoundVideos(self):
         return self.number_of_found_videos
+    def GetThumbUrlById(self,videoId):
+        if videoId == "":
+            videoId = self.GetCurrentVideoId()
+        return "https://img.youtube.com/vi/"+videoId+"/0.jpg"
+    def UpdateTagsAndGetTagsForThumbnailAsStringForSearch(self,amount):
+        self.MyClarifaiTaggerObj.UpdateTags(self.GetThumbUrlById(""))
+        return self.MyClarifaiTaggerObj.GetStringOfTagsWithAmount(amount)
     def SaveThumb(self):
         self.parent.statusbar.SetStatusText('Fetching image...',1)
-        thumb_url = "https://img.youtube.com/vi/"+self.GetCurrentVideoId()+"/0.jpg"
+        thumb_url = self.GetThumbUrlById(self.GetCurrentVideoId())
         testfile = urllib.URLopener()
         testfile.retrieve(thumb_url, "file.jpg")
         self.parent.statusbar.SetStatusText('Done',1)
@@ -121,13 +171,14 @@ class MyYouTubeSearcher():
         self.parent.statusbar.SetStatusText('Fetching images...',1)
         related_ids = self.GetRelatedIds()
         for related_id in related_ids:
-            local_address = "./related_images/"+related_id+".jpg"
-            thumb_url = "https://img.youtube.com/vi/"+related_id+"/1.jpg"
-            testfile = urllib.URLopener()
-            try:
-                r = testfile.retrieve(thumb_url, local_address)
-            except IOError:
-                a=1
+            for i in range(3):
+                local_address = "./related_images/"+related_id+"-"+str(i)+".jpg"
+                thumb_url = "https://img.youtube.com/vi/"+related_id+"/"+str(i+1)+".jpg"
+                testfile = urllib.URLopener()
+                try:
+                    r = testfile.retrieve(thumb_url, local_address)
+                except IOError:
+                    a=1
 
         self.parent.statusbar.SetStatusText('Done',1)
     def DownloadFile(self):
@@ -197,7 +248,7 @@ class MyYouTubeSearcher():
     def GetRandomWord(self):
         url = "http://setgetgo.com/randomword/get.php"
         content = urllib2.urlopen(url).read()
-        self.parent.search_text.SetValue(content+" music")
+        self.parent.search_text.SetValue(content)
     def NormalizeSeconds(self,sec):
         return time.strftime('%H:%M:%S', time.gmtime(float(sec)))
 class HistoryStuff():
@@ -250,6 +301,10 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj = MyYouTubeSearcher(self)
         self.HistoryStuffObj = HistoryStuff(self)
         self.now_timer_is_running = 0
+        self.user_input_backup = ""
+        self.related_thumbnail_updater_thread_is_running = 0
+        self.related_thumbnail_id_updater_thread = 0
+        self.related_thumbnails_current_indexes = [0]*6
 
         wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(725, 560),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
         self.Center()
@@ -285,6 +340,7 @@ class MyFrame(wx.Frame):
         self.sizer2 = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer3 = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer4 = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer5 = wx.BoxSizer(wx.HORIZONTAL)
         self.thumblails_sizer_l = wx.BoxSizer(wx.VERTICAL)
         self.thumblails_sizer_r = wx.BoxSizer(wx.VERTICAL)
 
@@ -307,6 +363,7 @@ class MyFrame(wx.Frame):
         self.browser = wx.html2.WebView.New(self.panel,size=(390, 275))
         self.index_info_edit = wx.TextCtrl(self.panel,size=(30, -1),style =  wx.TE_PROCESS_ENTER)
         self.index_info = wx.StaticText(self.panel, -1, "")
+        self.search_by_thumbnail_btn = wx.Button(self.panel, -1, "Search by thumbnail")
 
         self.open_in_browser_btn = wx.Button(self.panel, -1, "Open in browser")
         self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
@@ -318,21 +375,27 @@ class MyFrame(wx.Frame):
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[0].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(0))
         self.sBitMaps[0].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(0))
+        self.sBitMaps[0].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[1].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(1))
         self.sBitMaps[1].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(1))
+        self.sBitMaps[1].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[2].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(2))
         self.sBitMaps[2].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(2))
+        self.sBitMaps[2].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[3].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(3))
         self.sBitMaps[3].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(3))
+        self.sBitMaps[3].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[4].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(4))
         self.sBitMaps[4].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(4))
+        self.sBitMaps[4].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
         self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[5].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(5))
         self.sBitMaps[5].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(5))
+        self.sBitMaps[5].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
 
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
@@ -346,6 +409,8 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnStartHistoryMode, self.history_btn)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnChangeIndex, self.index_info_edit)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnSmartButton, self.search_text)
+        self.Bind(wx.EVT_BUTTON, self.OnSearchByThumbnailButton, self.search_by_thumbnail_btn)
+        self.Bind(wx.EVT_CHECKBOX, self.OnChangeCheckboxRandomSearch, self.check_random_search)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -375,11 +440,12 @@ class MyFrame(wx.Frame):
         self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
         self.right_sizer.Add(self.browser, proportion=0, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.sizer3)
-
         self.sizer4.Add(self.open_in_browser_btn, 0, wx.ALL, 10)
         self.sizer4.Add(self.delete_downloads_btn, 0, wx.ALL, 10)
         self.sizer4.Add(self.go_to_downloads_btn, 0, wx.ALL, 10)
+        self.sizer5.Add(self.search_by_thumbnail_btn, 0, wx.ALL, 10)
         self.right_sizer.Add(self.sizer4)
+        self.right_sizer.Add(self.sizer5)
         self.main_sizer.Add(self.left_sizer)
         self.main_sizer.Add(self.right_sizer)
 
@@ -391,15 +457,29 @@ class MyFrame(wx.Frame):
         self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
         self.playbtn.Disable()
         self.open_in_browser_btn.Disable()
+        self.search_by_thumbnail_btn.Disable()
         self.prevbtn.Disable()
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
+    def OnChangeCheckboxRandomSearch(self,evt):
+        if self.check_random_search.GetValue() == 1:
+            self.user_input_backup = self.search_text.GetValue()
+            self.search_text.Disable()
+            self.search_text.SetValue("")
+        else:
+            self.search_text.Enable()
+            self.search_text.SetValue(self.user_input_backup)
+    def OnSearchByThumbnailButton(self,evt):
+        self.search_text.Disable()
+        self.search_text.SetValue(self.MyYouTubeSearcherObj.UpdateTagsAndGetTagsForThumbnailAsStringForSearch(3))
+        self.OnSmartButton("")
+        self.search_text.Enable()
     def OnChangeIndex(self,evt):
         self.ChangeIndex(self.index_info_edit.GetValue())
     def OnStartHistoryMode(self,evt):
         global GlobalIfNowDownloading
-        self.history_btn.Disable()
+        #self.history_btn.Disable()
         self.HistoryStuffObj.ReadHistoryFromFile()
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
         self.RefreshSongInfo()
@@ -416,14 +496,39 @@ class MyFrame(wx.Frame):
         i = 0
         self.UnloadRelatedThumbs()
         for my_id in ids:
-            img_address_local = "./related_images/"+my_id+".jpg"
+            img_address_local = "./related_images/"+my_id+"-"+str(self.related_thumbnails_current_indexes[i])+".jpg"
             if os.path.isfile(img_address_local):
                 self.sBitMaps[i].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
             i+=1
+    def RunRelatedThumbnailsLoopUpdaterThread(self):
+        t1 = threading.Thread(target=self.ThumbnailLoopUpdater)
+        t1.daemon = True
+        t1.start()
+    def ThumbnailLoopUpdater(self):
+        bitmapId = self.related_thumbnail_id_updater_thread
+        ids = self.MyYouTubeSearcherObj.GetRelatedIds()
+        k = self.related_thumbnails_current_indexes[bitmapId]
+        while(self.related_thumbnail_updater_thread_is_running):
+            k+=1
+            if k > 2:
+                k=0
+            img_address_local = "./related_images/"+ids[bitmapId]+"-"+str(k)+".jpg"
+            self.related_thumbnails_current_indexes[bitmapId] = k
+            if os.path.isfile(img_address_local):
+                self.sBitMaps[bitmapId].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
+            for sleeping in range(1000):
+                if(self.related_thumbnail_updater_thread_is_running==0):
+                    return
+                time.sleep(0.001)
     def OnHoverThumbnail(self, id):
         ids = self.MyYouTubeSearcherObj.GetRelatedIds()
         if(len(ids)>id):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(ids[id]))
+            self.related_thumbnail_updater_thread_is_running = 1
+            self.related_thumbnail_id_updater_thread = id
+            self.RunRelatedThumbnailsLoopUpdaterThread()
+    def OnExitThumbnail(self,evt):
+        self.related_thumbnail_updater_thread_is_running = 0
     def OnClickThumbnail(self, id):
         global GlobalVideoIdForRelated
         ids = self.MyYouTubeSearcherObj.GetRelatedIds()
@@ -458,7 +563,7 @@ class MyFrame(wx.Frame):
     def OnSmartButton(self, evt):
         self.HistoryStuffObj.EnableDisableHistoryMode(0)
         self.text.SetLabel("Searching...")
-        self.duration_info.SetLabel("duration: unavailable")
+        self.duration_info.SetLabel("unavailable")
         self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
         if(self.check_random_search.GetValue()==1) and evt!="related_is_called":
             self.MyYouTubeSearcherObj.GetRandomWord()
@@ -468,15 +573,17 @@ class MyFrame(wx.Frame):
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.UnloadRelatedThumbs()
             self.text.SetLabel("No Results!")
-            self.duration_info.SetLabel("duration: unavailable")
+            self.duration_info.SetLabel("unavailable")
             self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
             self.statusbar.SetStatusText('Nothing Found...',1)
+            self.open_in_browser_btn.Disable()
+            self.search_by_thumbnail_btn.Disable()
+            self.playbtn.Disable()
             return None
         self.RefreshSongInfo()
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
-        self.open_in_browser_btn.Enable()
         self.history_btn.Enable()
 
     def StopTimer(self):
@@ -544,12 +651,14 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.LoadStatisticsAndInformation()
         self.MyYouTubeSearcherObj.LoadContentDetails()
         self.browser.SetPage('<img src="'+os.getcwd()+'\\file.jpg" alt="'+self.MyYouTubeSearcherObj.GetTitle()+'" height="240" width="320">',"")
-        self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitle())
+        self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitleFromId(""))
         self.MyYouTubeSearcherObj.LoadRelatedVideos()
-        self.duration_info.SetLabel("duration: "+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration()))
+        self.duration_info.SetLabel(self.MyYouTubeSearcherObj.GetPublishedAt()+" "+"["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]")
         self.index_info_edit.Enable()
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
+        self.open_in_browser_btn.Enable()
+        self.search_by_thumbnail_btn.Enable()
     def RunTimer(self):
         title = self.MyYouTubeSearcherObj.temp_future_filename
         dots = ""
@@ -588,7 +697,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.AppendToHistoryFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v1.90")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.00")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
