@@ -9,6 +9,7 @@ import re
 import time
 import webbrowser
 import os.path
+import isodate
 GlobalSmartThreadRuning = 0
 
 
@@ -18,55 +19,67 @@ class MyYouTubeSearcher():
     def __init__(self,parent):
         self.index = 0
         self.parent = parent
-        self.data_info = ""
-        self.full_data_info = ""
-        self.content_details = ""
+        self.data_info = dict()
+        self.full_data_info = dict()
+        self.content_details = dict()
+        self.related_videos = dict()
         self.ext = 'mp3'
+        self.number_of_found_videos = 0
+    def GetCurrentVideoId(self):
+        return self.data_info["items"][self.index]["id"]["videoId"]
     def GetWatchUrl(self):
-        return 'https://www.youtube.com/watch?v='+self.data_info["items"][self.index]["id"]["videoId"]
+        return 'https://www.youtube.com/watch?v='+self.GetCurrentVideoId()
     def GetSavingFileName(self):
-        return self.GetTitle()[:30].replace(" ","_")+'_'+str(self.data_info["items"][self.index]["id"]["videoId"])+'.'+self.ext
+        return self.GetTitle()[:30].replace(" ","_")+'_'+str(self.GetCurrentVideoId())+'.'+self.ext
     def SetExt(self,param):
         self.ext = param
-    def GetNumberOfFoundVideos(self):
-        return len(self.data_info)-2
     def SearchPlease(self,query):
         query = query.encode(encoding='UTF-8',errors='strict')
         self.parent.statusbar.SetStatusText('Searching for "'+query.decode(encoding='UTF-8',errors='strict')+'"')
         query = query.replace(' ', '+')
-        self.data_info = list()
-        self.found_ids = list()
-        splitted_content = list()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&type=video&key="+api_key
+        self.data_info = dict()
+        self.found_ids = dict()
+        splitted_content = dict()
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=20&type=video&key="+api_key
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
+        self.number_of_found_videos = len(self.data_info[u"items"])
         self.parent.statusbar.SetStatusText('Done')
     def LoadStatisticsAndInformation(self):
         self.full_data_info = list()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.data_info["items"][self.index]["id"]["videoId"]+"&key="+api_key+"&fields=items(id,snippet(channelId,title,categoryId),statistics)&part=snippet,statistics"
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_key+"&fields=items(id,snippet(channelId,title,categoryId),statistics)&part=snippet,statistics"
         content = urllib2.urlopen(my_url).read()
         self.full_data_info = json.loads(content)
     def LoadContentDetails(self):
         self.content_details = list()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.data_info["items"][self.index]["id"]["videoId"]+"&part=contentDetails&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&key="+api_key
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
+    def LoadRelatedVideos(self,videoId):
+        if(videoId==""):
+            videoId = self.GetCurrentVideoId()
+        self.related_videos = list()
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults=6&type=video&key="+api_key
+        content = urllib2.urlopen(my_url).read()
+        self.related_videos = json.loads(content)
+    def GetRelatedIds(self):
+        list_to_return = list()
+        i = 0
+        while(i<len(self.related_videos["items"])):
+            list_to_return.append(self.related_videos["items"][i]["id"]["videoId"])
+            i+=1
+        return list_to_return
     def GetDuration(self):
         duration_str = self.content_details["items"][0]["contentDetails"]["duration"]
-        duration_sec = re.findall('\d+', duration_str)
-        i = 0
-        mul = 1
-        sum_seconds = 0
-        while(i<len(duration_sec)):
-            sum_seconds += int(duration_sec[len(duration_sec)-1-i])*mul
-            i+=1
-            mul*=60
-        return str(sum_seconds)
+        dur=isodate.parse_duration(duration_str)
+        return str(int(dur.total_seconds()))
     def GetTitle(self):
         return str(re.sub('[^A-Za-z0-9]+', ' ', self.full_data_info["items"][0]["snippet"]["title"]))
+    def GetNumberOfFoundVideos(self):
+        return self.number_of_found_videos
     def SaveThumb(self):
         self.parent.statusbar.SetStatusText('Fetching image...')
-        thumb_url = "https://img.youtube.com/vi/"+self.data_info["items"][self.index]["id"]["videoId"]+"/0.jpg"
+        thumb_url = "https://img.youtube.com/vi/"+self.GetCurrentVideoId()+"/0.jpg"
         testfile = urllib.URLopener()
         testfile.retrieve(thumb_url, "file.jpg")
         self.parent.statusbar.SetStatusText('Done')
@@ -107,7 +120,6 @@ class MyYouTubeSearcher():
     def CleanDirectoryFromDumpFiles(self):
         self.parent.statusbar.SetStatusText('Cleaning download dir dump files...')
         test=os.listdir(os.getcwd()+"\\downloads")
-        print test
         for item in test:
             if item.endswith(".webm") or item.endswith(".part") or item.endswith("temp.mp3") or item.endswith("temp.mp4"):
                 os.remove(os.getcwd()+"\\downloads\\"+item)
@@ -140,6 +152,8 @@ class MyYouTubeSearcher():
         url = "http://setgetgo.com/randomword/get.php"
         content = urllib2.urlopen(url).read()
         self.parent.search_text.SetValue(content+" music")
+    def NormalizeSeconds(self,sec):
+        return time.strftime('%H:%M:%S', time.gmtime(float(sec)))
 class MyFrame(wx.Frame):
     """
     This is MyFrame.  It just shows a few controls on a wxPanel,
@@ -175,6 +189,19 @@ class MyFrame(wx.Frame):
         # Now create the Panel to put the other controls on.
         self.panel = wx.Panel(self)
 
+        # Use a sizer to layout the controls, stacked vertically and with
+        # a 10 pixel border around each
+        self.main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.left_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.left_sizer1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.right_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer3 = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer4 = wx.BoxSizer(wx.HORIZONTAL)
+        self.thumblails_sizer_l = wx.BoxSizer(wx.VERTICAL)
+        self.thumblails_sizer_r = wx.BoxSizer(wx.VERTICAL)
+
         # and a few controls
         self.check_random_search = wx.CheckBox(self.panel, label = 'random search',pos = (10,10))
         self.check_hight_quality = wx.CheckBox(self.panel, label = 'hight quality',pos = (10,10))
@@ -189,8 +216,24 @@ class MyFrame(wx.Frame):
         self.prevbtn = wx.Button(self.panel, -1, "Prev")
         self.nextbtn = wx.Button(self.panel, -1, "Next")
         self.browser = wx.html2.WebView.New(self.panel,size=(390, 275))
+        self.index_info = wx.StaticText(self.panel, -1, "")
         self.open_in_browser_btn = wx.Button(self.panel, -1, "Open in browser")
         self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
+
+        # GRID OF THUMBNAILS
+        self.sBitMaps = list()
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[0].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(0))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[1].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(2))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[2].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(4))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[3].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(1))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[4].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(3))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(160, 120)))
+        self.sBitMaps[5].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(5))
 
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
@@ -201,15 +244,11 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.PrevSong, self.prevbtn)
         self.Bind(wx.EVT_BUTTON, self.NextSong, self.nextbtn)
 
-        # Use a sizer to layout the controls, stacked vertically and with
-        # a 10 pixel border around each
-        self.main_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.left_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.right_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.sizer1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer2 = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer3 = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer4 = wx.BoxSizer(wx.HORIZONTAL)
+        # GRID OF THUMBNAILS
+        for i in range(3):
+            self.thumblails_sizer_l.Add(self.sBitMaps[i])
+        for i in range(3):
+            self.thumblails_sizer_r.Add(self.sBitMaps[3+i])
 
         # Adding things to sizers
         self.sizer1.Add(self.check_random_search,0,wx.ALL,10)
@@ -220,12 +259,17 @@ class MyFrame(wx.Frame):
         self.sizer2.Add(self.search_text,flag=wx.ALIGN_CENTER)
         self.sizer3.Add(self.prevbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.nextbtn, 0, wx.ALL, 10)
+        self.sizer3.Add(self.index_info, 0, wx.ALL, 10)
         self.left_sizer.Add(self.sizer1)
         self.left_sizer.Add(self.sizer2)
+        self.left_sizer.Add(self.left_sizer1)
+        self.left_sizer1.Add(self.thumblails_sizer_l)
+        self.left_sizer1.Add(self.thumblails_sizer_r)
         self.right_sizer.Add(self.text, 0, wx.ALL, 10)
         self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
         self.right_sizer.Add(self.browser, proportion=0, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.sizer3)
+
         self.sizer4.Add(self.open_in_browser_btn, 0, wx.ALL, 10)
         self.sizer4.Add(self.delete_downloads_btn, 0, wx.ALL, 10)
         self.right_sizer.Add(self.sizer4)
@@ -243,6 +287,8 @@ class MyFrame(wx.Frame):
         self.prevbtn.Disable()
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
+    def OnClickThumbnail(self, id):
+        return
     def OnDeleteDownloads(self,evt):
         dlg = wx.MessageDialog(None, 'All download files will be deleted?', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
         result = dlg.ShowModal()
@@ -267,16 +313,16 @@ class MyFrame(wx.Frame):
 
     def OnSmartButton(self, evt):
         self.text.SetLabel("Searching...")
-        self.duration_info.SetLabel("duration in seconds = unavailable")
+        self.duration_info.SetLabel("duration: unavailable")
         self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
         if(self.check_random_search.GetValue()==1):
             self.MyYouTubeSearcherObj.GetRandomWord()
         self.MyYouTubeSearcherObj.index = 0
         self.RefreshPrevAndNextButtons()
         self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
-        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==3:
+        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.text.SetLabel("No Results!")
-            self.duration_info.SetLabel("duration in seconds = unavailable")
+            self.duration_info.SetLabel("duration: unavailable")
             self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
             self.statusbar.SetStatusText('Nothing Found...')
             return None
@@ -299,7 +345,7 @@ class MyFrame(wx.Frame):
             self.prevbtn.Disable()
         else:
             self.prevbtn.Enable()
-        if(self.MyYouTubeSearcherObj.index==self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()):
+        if(self.MyYouTubeSearcherObj.index==self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()-1):
             self.nextbtn.Disable()
         else:
             self.nextbtn.Enable()
@@ -317,7 +363,8 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.LoadContentDetails()
         self.browser.SetPage('<img src="'+os.getcwd()+'\\file.jpg" alt="'+self.MyYouTubeSearcherObj.GetTitle()+'" height="240" width="320">',"")
         self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitle())
-        self.duration_info.SetLabel("duration in seconds = "+self.MyYouTubeSearcherObj.GetDuration())
+        self.duration_info.SetLabel("duration: "+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration()))
+        self.index_info.SetLabel(str(self.MyYouTubeSearcherObj.index+1)+"/"+str(self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()))
     def RunTimer(self):
         title = self.MyYouTubeSearcherObj.GetTitle()
         dots = ""
@@ -328,7 +375,7 @@ class MyFrame(wx.Frame):
         while(remaining_time_in_seconds_for_timer_data>0 and self.now_timer_is_running):
             time.sleep(1)
             remaining_time_in_seconds_for_timer_data-=1
-            self.statusbar.SetStatusText("Playing: "+title[:30]+dots+" ["+str(remaining_time_in_seconds_for_timer_data)+" seconds remaining]", 1)
+            self.statusbar.SetStatusText("Playing: "+title[:30]+dots+" ["+self.MyYouTubeSearcherObj.NormalizeSeconds(remaining_time_in_seconds_for_timer_data)+"]", 1)
         self.statusbar.SetStatusText("", 1)
     def SmartBtnThread(self):
         self.OnReadButton("")
@@ -349,7 +396,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.AppendToLogFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v1.50")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v1.60")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
