@@ -39,8 +39,11 @@ class ImageTools():
                 os.unlink(infile)
             os.rename(temp_name,infile)
             self.parent.statusbar.SetStatusText("",1)
+            return 1
         except IOError:
-            print "cannot create thumbnail"
+            #"cannot create thumbnail"
+            return 0
+
     def MergeTwoImagesToMerged(self,bg,fg):
         background = Image.open(bg)
         foreground = Image.open(fg)
@@ -125,7 +128,10 @@ class MyYouTubeSearcher():
         if(self.parent.HistoryStuffObj.CheckIfInHistoryMode()):
             return self.parent.HistoryStuffObj.GetCurrentVideoId()
         else:
-            return self.data_info["items"][self.GetIndex()]["id"]["videoId"]
+            if(self.parent.check_playlist_search.GetValue()):
+                return self.data_info["items"][self.GetIndex()]["snippet"]["resourceId"]["videoId"]
+            else:
+                return self.data_info["items"][self.GetIndex()]["id"]["videoId"]
     def GetWatchUrl(self):
         return 'https://www.youtube.com/watch?v='+self.GetCurrentVideoId()
     def GetSavingFileName(self):
@@ -133,13 +139,32 @@ class MyYouTubeSearcher():
     def SetExt(self,param):
         self.ext = param
     def SearchPlease(self,query):
+        self.parent.current_main_title = "Search videos: "+query
         self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
         query = query.encode(encoding='UTF-8',errors='strict')
         query = query.replace(' ', '+')
         self.data_info = dict()
         self.found_ids = dict()
-        splitted_content = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=20&type=video&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=20&type=video&fields=items(id(videoId))&key="+api_key
+        #webbrowser.open_new(my_url)
+        content = urllib2.urlopen(my_url).read()
+        self.data_info = json.loads(content)
+        self.number_of_found_videos = len(self.data_info[u"items"])
+        self.parent.statusbar.SetStatusText("",1)
+    def SearchListPlease(self,query):
+        self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
+        query = query.encode(encoding='UTF-8',errors='strict')
+        query = query.replace(' ', '+')
+        self.data_info = dict()
+        self.found_ids = dict()
+        found_lists_info = dict()
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet,id&kind=playlist&q="+query+"&maxResults=1&type=playlist&fields=items(id(playlistId),snippet(title))&key="+api_key
+        #webbrowser.open_new(my_url)
+        content = urllib2.urlopen(my_url).read()
+        found_lists_info = json.loads(content)
+        playlistId = found_lists_info["items"][0]["id"]["playlistId"]
+        self.parent.current_main_title = "List: "+found_lists_info["items"][0]["snippet"]["title"]
+        my_url = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId="+playlistId+"&fields=items(snippet(resourceId(videoId)))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
@@ -185,11 +210,18 @@ class MyYouTubeSearcher():
             i+=1
         return list_to_return
     def GetDuration(self):
-        duration_str = self.content_details["items"][0]["contentDetails"]["duration"]
-        dur=isodate.parse_duration(duration_str)
-        return str(int(dur.total_seconds()))
+        if(len(self.content_details["items"])>0):
+            duration_str = self.content_details["items"][0]["contentDetails"]["duration"]
+            dur=isodate.parse_duration(duration_str)
+            return str(int(dur.total_seconds()))
+        else:
+            return "unavailable"
+
     def GetPublishedAt(self):
-        return str(isodate.parse_datetime(self.full_data_info["items"][0]["snippet"]["publishedAt"])).split("+")[0]
+        if(len(self.full_data_info["items"])>0):
+            return str(isodate.parse_datetime(self.full_data_info["items"][0]["snippet"]["publishedAt"])).split("+")[0]
+        else:
+            return ""
     def GetTitleFromId(self,id):
         self.parent.statusbar.SetStatusText("Getting title from id",1)
         if id=="":
@@ -199,7 +231,10 @@ class MyYouTubeSearcher():
         content = urllib2.urlopen(url).read()
         info = json.loads(content)
         self.parent.statusbar.SetStatusText("",1)
-        return info["items"][0]["snippet"]["title"]
+        if(len(info["items"])>0):
+            return info["items"][0]["snippet"]["title"]
+        else:
+            return "Deleted Video"
     def GetTitle(self):
         return str(re.sub('[^A-Za-z0-9]+', ' ', self.full_data_info["items"][0]["snippet"]["title"]))
     def GetNumberOfFoundVideos(self):
@@ -215,7 +250,10 @@ class MyYouTubeSearcher():
         self.parent.statusbar.SetStatusText('Fetching main thumbnail...',1)
         thumb_url = self.GetThumbUrlById(self.GetCurrentVideoId())
         testfile = urllib.URLopener()
-        testfile.retrieve(thumb_url, "file.jpg")
+        try:
+            testfile.retrieve(thumb_url, "file.jpg")
+        except IOError:
+            a=1
         self.parent.statusbar.SetStatusText("",1)
     def ClearRelatedThubms(self):
         os.system('del /Q "'+os.getcwd()+'\\related_images\\*"')
@@ -303,7 +341,10 @@ class MyYouTubeSearcher():
         content = urllib2.urlopen(url).read()
         self.parent.search_text.SetValue(content)
     def NormalizeSeconds(self,sec):
-        return time.strftime('%H:%M:%S', time.gmtime(float(sec)))
+        if(sec!="unavailable"):
+            return time.strftime('%H:%M:%S', time.gmtime(float(sec)))
+        else:
+            return ""
 class HistoryStuff():
     def __init__(self,parent):
         self.parent = parent
@@ -337,6 +378,7 @@ class HistoryStuff():
             self.history_list = list()
         else:
             self.RemoveDuplicates()
+            self.parent.current_main_title = "Your History"
         self.index = self.GetSizeOfHistory()-1
     def GetIndex(self):
         return self.index
@@ -384,8 +426,9 @@ class MyFrame(wx.Frame):
         self.related_thumbnail_updater_thread_is_running = 0
         self.related_thumbnail_id_updater_thread = 0
         self.related_thumbnails_current_indexes = [0]*6
+        self.current_main_title = ""
 
-        wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(660, 550),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
+        wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(660, 615),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
         self.Center()
 
 
@@ -423,21 +466,23 @@ class MyFrame(wx.Frame):
         self.thumblails_sizer_l = wx.BoxSizer(wx.VERTICAL)
         self.thumblails_sizer_r = wx.BoxSizer(wx.VERTICAL)
         self.history_and_recommendator_sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-
+        self.hq_mp3_or_mp4_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.search_box_btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # and a few controls
         self.check_random_search = wx.CheckBox(self.panel, label = 'random search',pos = (10,10))
         self.check_hight_quality = wx.CheckBox(self.panel, label = 'hight quality',pos = (10,10))
         self.check_auto_play = wx.CheckBox(self.panel, label = 'auto play',pos = (10,10))
         self.check_mp4_or_mp3 = wx.Button(self.panel, -1, self.MyYouTubeSearcherObj.ext)
-        self.text = wx.StaticText(self.panel, -1, "")
+        self.main_title_static_text = wx.StaticText(self.panel, -1, "", size=(200, 20))
+        self.main_title_static_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
+        self.text = wx.StaticText(self.panel, -1, "", size=(200, 50))
         self.duration_info = wx.StaticText(self.panel, -1, "")
         self.text.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
         self.text.SetSize(self.text.GetBestSize())
-        self.search_text = wx.TextCtrl(self.panel,size=(300, -1),style =  wx.TE_PROCESS_ENTER)
-        self.smartbtn = wx.Button(self.panel, -1, "Smart Button")
-        self.playbtn = wx.Button(self.panel, -1, "Get Button")
+        self.search_text = wx.TextCtrl(self.panel,size=(200, -1), style =  wx.TE_PROCESS_ENTER)
+        self.smartbtn = wx.Button(self.panel, -1, "Search", size=(60, 25))
+        self.playbtn = wx.Button(self.panel, -1, "Download selected video",size=(270, 25))
         self.prevbtn = wx.Button(self.panel, -1, "Prev")
         self.nextbtn = wx.Button(self.panel, -1, "Next")
         self.index_info_edit = wx.TextCtrl(self.panel,size=(30, -1),style =  wx.TE_PROCESS_ENTER)
@@ -449,6 +494,7 @@ class MyFrame(wx.Frame):
         self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
         self.history_btn = wx.Button(self.panel, -1, "History mode")
         self.recommend_btn = wx.Button(self.panel, -1, "Recommended for you")
+        self.check_playlist_search = wx.CheckBox(self.panel, label = 'searching for list',pos = (10,10))
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -504,17 +550,21 @@ class MyFrame(wx.Frame):
 
         # Adding things to sizers
         self.sizer1.Add(self.check_random_search,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
-        self.sizer1.Add(self.check_hight_quality,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
-        self.sizer1.Add(self.check_mp4_or_mp3,0,wx.ALL,10)
-        self.sizer2.Add(self.smartbtn, 0, wx.ALL, 10)
+        self.sizer1.Add(self.check_playlist_search,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.sizer2.Add(self.playbtn, 0, wx.ALL, 10)
-        self.sizer2.Add(self.check_auto_play, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.sizer3.Add(self.prevbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.nextbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info_edit, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info, 0, wx.ALL, 10)
-        self.left_sizer.Add(self.sizer1)
-        self.left_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
+        self.left_sizer.Add(self.sizer1, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+
+        self.search_box_btn_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
+        self.search_box_btn_sizer.Add(self.smartbtn, 0, wx.ALL, 10)
+        self.left_sizer.Add(self.search_box_btn_sizer, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.hq_mp3_or_mp4_sizer.Add(self.check_mp4_or_mp3,0,wx.ALL,10)
+        self.hq_mp3_or_mp4_sizer.Add(self.check_hight_quality,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.hq_mp3_or_mp4_sizer.Add(self.check_auto_play, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.left_sizer.Add(self.hq_mp3_or_mp4_sizer)
         self.left_sizer.Add(self.sizer2)
         self.left_sizer.Add(self.left_sizer1)
         self.history_and_recommendator_sizer.Add(self.history_btn, 0, wx.ALL, 10)
@@ -522,6 +572,7 @@ class MyFrame(wx.Frame):
         self.left_sizer.Add(self.history_and_recommendator_sizer)
         self.left_sizer1.Add(self.thumblails_sizer_l, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer1.Add(self.thumblails_sizer_r, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.right_sizer.Add(self.main_title_static_text, 0, wx.ALL, 10)
         self.right_sizer.Add(self.text, 0, wx.ALL, 10)
         self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
         self.right_sizer.Add(self.main_image_thumb, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
@@ -686,7 +737,11 @@ class MyFrame(wx.Frame):
             self.MyYouTubeSearcherObj.GetRandomWord()
         self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshPrevAndNextButtons()
-        self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
+        if(self.check_playlist_search.GetValue()):
+            self.MyYouTubeSearcherObj.SearchListPlease(self.search_text.GetValue())
+        else:
+
+            self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.UnloadRelatedThumbs()
             self.text.SetLabel("No Results!")
@@ -754,6 +809,9 @@ class MyFrame(wx.Frame):
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
     def RefreshSongInfo(self):
+        global GlobalVideoIdForRelated
+        if(not self.check_playlist_search):
+            self.MyYouTubeSearcherObj.current_list_title = ""
         self.UnloadRelatedThumbs()
         self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
         if self.HistoryStuffObj.CheckIfInHistoryMode():
@@ -769,14 +827,21 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.SaveThumb()
         self.MyYouTubeSearcherObj.LoadStatisticsAndInformation()
         self.MyYouTubeSearcherObj.LoadContentDetails()
-        self.MyImageToolsObj.ResizeImage("file.jpg",(320,240))
+        img_downloaded = self.MyImageToolsObj.ResizeImage("file.jpg",(320,240))
+        if(GlobalVideoIdForRelated != ""):
+            self.main_title_static_text.SetLabel("Related Video")
+        else:
+            self.main_title_static_text.SetLabel(self.current_main_title)
         self.text.SetLabel(re.sub("(.{40})", "\\1\n", self.MyYouTubeSearcherObj.GetTitleFromId(""), 0, re.DOTALL))
 
         self.duration_info.SetLabel(self.MyYouTubeSearcherObj.GetPublishedAt()+" "+"["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]")
         self.index_info_edit.Enable()
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
-        self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
+        if(img_downloaded):
+        	self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
+        else:
+            self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
         self.open_in_browser_btn.Enable()
         self.search_by_thumbnail_btn.Enable()
     def RunTimer(self):
