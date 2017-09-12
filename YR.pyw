@@ -181,14 +181,14 @@ class MyYouTubeSearcher():
     def LoadContentDetails(self):
         self.parent.statusbar.SetStatusText("Loading content details...",1)
         self.content_details = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&fields=items(contentDetails(duration))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
         self.parent.statusbar.SetStatusText("",1)
     def RequestRelatedVideosDictByVideoWithId(self,videoId):
         self.parent.statusbar.SetStatusText("Requesting related videos dictionary...",1)
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults=6&type=video&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults=6&type=video&fields=items(id(videoId))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         return json.loads(content)
@@ -272,9 +272,17 @@ class MyYouTubeSearcher():
                     a=1
 
         self.parent.statusbar.SetStatusText("",1)
+    def DownloadingStatusLoopUpdater(self):
+        global GlobalIfNowDownloading
+        while(GlobalIfNowDownloading):
+            time.sleep(0.1)
+            self.parent.statusbar.SetStatusText('Downloading: '+self.temp_future_filename[:15]+'...'+self.temp_future_filename[20:],1)
+
     def DownloadFile(self):
-        self.parent.statusbar.SetStatusText('Downloading: '+self.temp_future_filename[:15]+'...'+self.temp_future_filename[20:],1)
         self.temp_future_filename = self.GetSavingFileName()
+        thread_download_status_loop_updater = threading.Thread(target=self.DownloadingStatusLoopUpdater)
+        thread_download_status_loop_updater.daemon = True
+        thread_download_status_loop_updater.start()
         hight_quality_parameters = ""
         format_parameters = ""
 
