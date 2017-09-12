@@ -21,6 +21,7 @@ warnings.filterwarnings('ignore')
 GlobalSmartThreadRuning = 0
 GlobalVideoIdForRelated = ""
 GlobalIfNowDownloading = 0
+GlobalLastRenameFileResult = 0
 api_key = #ENTER YOUR API KEY HERE
 
 class ImageTools():
@@ -115,6 +116,9 @@ class MyYouTubeSearcher():
     def IncrementIndex(self):
         if(self.index+1<self.GetNumberOfFoundVideos()):
             self.index+=1
+            return 0
+        else:
+            return 1 #is last song
     def DecrementIndex(self):
         if(self.index-1>=0):
             self.index-=1
@@ -277,7 +281,7 @@ class MyYouTubeSearcher():
         while(GlobalIfNowDownloading):
             time.sleep(0.1)
             self.parent.statusbar.SetStatusText('Downloading: '+self.temp_future_filename[:15]+'...'+self.temp_future_filename[20:],1)
-
+        self.parent.statusbar.SetStatusText("",1)
     def DownloadFile(self):
         self.temp_future_filename = self.GetSavingFileName()
         thread_download_status_loop_updater = threading.Thread(target=self.DownloadingStatusLoopUpdater)
@@ -303,11 +307,15 @@ class MyYouTubeSearcher():
         self.RenameMp3File()
         self.parent.statusbar.SetStatusText("",1)
     def LetsHearTheSong(self):
-        self.t_timer = threading.Thread(target=self.parent.RunTimer)
-        self.t_timer.daemon = True
-        self.t_timer.start()
+        global GlobalLastRenameFileResult
         if(self.parent.IfAutoPlay()==1):
-            os.startfile('downloads\\'+self.temp_future_filename, 'open')
+            if(GlobalLastRenameFileResult):
+                self.t_timer = threading.Thread(target=self.parent.RunTimer)
+                self.t_timer.daemon = True
+                self.t_timer.start()
+                os.startfile('downloads\\'+self.temp_future_filename, 'open')
+            else:
+                self.parent.CheckAndContinueIfIsEnabledContinuousMode("start_from_beginning_after_end")
     def PlayMp3InDir(self,event):
         self.parent.statusbar.SetStatusText('Prepare file...',1)
         self.LetsHearTheSong()
@@ -330,14 +338,18 @@ class MyYouTubeSearcher():
         dlg.ShowModal()
         dlg.Destroy()
     def RenameMp3File(self):
+        global GlobalLastRenameFileResult
         self.StopMusic()
         time.sleep(2)
         file_to_check_and_rename = os.path.join(os.getcwd(), "downloads\\temp."+self.ext)
         if(os.path.isfile(file_to_check_and_rename)):
             os.system('rename "'+file_to_check_and_rename+'" "'+self.temp_future_filename+'"')
+            GlobalLastRenameFileResult = 1
             return 1
         else:
-            self.ShowMessageCantBeDownload()
+            if(not self.parent.check_continuous_play.GetValue()):
+                self.ShowMessageCantBeDownload()
+            GlobalLastRenameFileResult = 0
             return 0
     def StopMusic(self):
         if(self.parent.IfAutoPlay()==1):
@@ -393,6 +405,9 @@ class HistoryStuff():
     def IncrementIndex(self):
         if(self.index+1<self.GetSizeOfHistory()):
             self.index+=1
+            return 0
+        else:
+            return 1
     def DecrementIndex(self):
         if(self.index-1>=0):
             self.index-=1
@@ -479,9 +494,9 @@ class MyFrame(wx.Frame):
 
         # and a few controls
         self.check_random_search = wx.CheckBox(self.panel, label = 'random search',pos = (10,10))
-        self.check_hight_quality = wx.CheckBox(self.panel, label = 'hight quality',pos = (10,10))
+        self.check_hight_quality = wx.CheckBox(self.panel, label = 'HQ',pos = (10,10))
         self.check_auto_play = wx.CheckBox(self.panel, label = 'auto play',pos = (10,10))
-        self.check_mp4_or_mp3 = wx.Button(self.panel, -1, self.MyYouTubeSearcherObj.ext)
+        self.check_mp4_or_mp3 = wx.Button(self.panel, -1, self.MyYouTubeSearcherObj.ext, size=(40, 25))
         self.main_title_static_text = wx.StaticText(self.panel, -1, "", size=(200, 20))
         self.main_title_static_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.BOLD))
         self.text = wx.StaticText(self.panel, -1, "", size=(200, 50))
@@ -502,7 +517,8 @@ class MyFrame(wx.Frame):
         self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
         self.history_btn = wx.Button(self.panel, -1, "History mode")
         self.recommend_btn = wx.Button(self.panel, -1, "Recommended for you")
-        self.check_playlist_search = wx.CheckBox(self.panel, label = 'searching for list',pos = (10,10))
+        self.check_playlist_search = wx.CheckBox(self.panel, label = 'search for list',pos = (10,10))
+        self.check_continuous_play = wx.CheckBox(self.panel, label = 'continuous',pos = (10,10))
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -537,7 +553,7 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnOpenInBrowser, self.open_in_browser_btn)
         self.Bind(wx.EVT_BUTTON, self.OnDeleteDownloads, self.delete_downloads_btn)
         self.Bind(wx.EVT_BUTTON, self.OnOpenDownloads, self.go_to_downloads_btn)
-        self.Bind(wx.EVT_BUTTON, self.OnLetSPlayMusic, self.playbtn)
+        self.Bind(wx.EVT_BUTTON, self.OnDownloadFile, self.playbtn)
         self.Bind(wx.EVT_BUTTON, self.PrevSong, self.prevbtn)
         self.Bind(wx.EVT_BUTTON, self.NextSong, self.nextbtn)
         self.Bind(wx.EVT_BUTTON, self.OnStartHistoryMode, self.history_btn)
@@ -572,6 +588,7 @@ class MyFrame(wx.Frame):
         self.hq_mp3_or_mp4_sizer.Add(self.check_mp4_or_mp3,0,wx.ALL,10)
         self.hq_mp3_or_mp4_sizer.Add(self.check_hight_quality,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.hq_mp3_or_mp4_sizer.Add(self.check_auto_play, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.hq_mp3_or_mp4_sizer.Add(self.check_continuous_play, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer.Add(self.hq_mp3_or_mp4_sizer)
         self.left_sizer.Add(self.sizer2)
         self.left_sizer.Add(self.left_sizer1)
@@ -766,12 +783,13 @@ class MyFrame(wx.Frame):
 
     def StopTimer(self):
         self.now_timer_is_running = 0
-    def OnLetSPlayMusic(self, evt):
+    def OnDownloadFile(self, evt):
         self.MyYouTubeSearcherObj.CleanDirectoryFromDumpFiles()
         self.StopTimer()
-        self.MyYouTubeSearcherObj.StopMusic()
+        if(self.check_continuous_play.GetValue):
+            self.MyYouTubeSearcherObj.StopMusic()
         self.remaining_time_in_seconds_for_timer_data = int(self.MyYouTubeSearcherObj.GetDuration())
-        t1 = threading.Thread(target=self.SmartBtnThread)
+        t1 = threading.Thread(target=self.DownloadBtnThread)
         t1.daemon = True
         t1.start()
     def RefreshPrevAndNextButtons(self):
@@ -809,13 +827,14 @@ class MyFrame(wx.Frame):
         self.RefreshPrevAndNextButtons()
     def NextSong(self, evt):
         if self.HistoryStuffObj.CheckIfInHistoryMode():
-            self.HistoryStuffObj.IncrementIndex()
+            if_last = self.HistoryStuffObj.IncrementIndex()
         else:
-            self.MyYouTubeSearcherObj.IncrementIndex()
+            if_last = self.MyYouTubeSearcherObj.IncrementIndex()
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = ""
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
+        return if_last
     def RefreshSongInfo(self):
         global GlobalVideoIdForRelated
         if(not self.check_playlist_search):
@@ -840,6 +859,9 @@ class MyFrame(wx.Frame):
             self.main_title_static_text.SetLabel("Related Video")
         else:
             self.main_title_static_text.SetLabel(self.current_main_title)
+        if(self.MyYouTubeSearcherObj.GetTitleFromId("")=="Deleted Video"):
+            self.NextSong("")
+            return
         self.text.SetLabel(re.sub("(.{40})", "\\1\n", self.MyYouTubeSearcherObj.GetTitleFromId(""), 0, re.DOTALL))
 
         self.duration_info.SetLabel(self.MyYouTubeSearcherObj.GetPublishedAt()+" "+"["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]")
@@ -853,23 +875,44 @@ class MyFrame(wx.Frame):
         self.open_in_browser_btn.Enable()
         self.search_by_thumbnail_btn.Enable()
     def RunTimer(self):
+        global GlobalLastRenameFileResult
         title = self.MyYouTubeSearcherObj.temp_future_filename
         dots = ""
         if(len(title)>30):
             dots = "..."
-        self.now_timer_is_running = 1
+        if(GlobalLastRenameFileResult):
+            self.now_timer_is_running = 1
+        else:
+            self.now_timer_is_running = 0
         remaining_time_in_seconds_for_timer_data = self.remaining_time_in_seconds_for_timer_data
         while(remaining_time_in_seconds_for_timer_data>0 and self.now_timer_is_running):
             time.sleep(1)
             remaining_time_in_seconds_for_timer_data-=1
             self.statusbar.SetStatusText("Playing: "+title[:30]+dots+" ["+self.MyYouTubeSearcherObj.NormalizeSeconds(remaining_time_in_seconds_for_timer_data)+"]", 1)
         self.statusbar.SetStatusText("", 1)
-    def SmartBtnThread(self):
-        self.OnReadButton("")
-        if(self.IfAutoPlay()==0):
+        if(self.now_timer_is_running):
+            self.CheckAndContinueIfIsEnabledContinuousMode("start_from_beginning_after_end")
+    def CheckAndContinueIfIsEnabledContinuousMode(self,argument):
+        if(self.check_continuous_play.GetValue()):
+            if self.NextSong(""):
+                if(argument == "start_from_beginning_after_end"):
+                    self.ChangeIndex("1")
+                elif(argument == "stop_after_end"):
+                    self.ShowAllDownloadMessage()
+                    return
+            self.OnDownloadFile("")
+    def ShowAllDownloadMessage(self):
+        dlg = wx.MessageDialog(self.panel,"The list ended. All Downloaded.", "Download complete!", wx.OK | wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
+    def DownloadBtnThread(self):
+        self.OnDownloadButton("")
+        if(self.IfAutoPlay()==1):
+            self.MyYouTubeSearcherObj.PlayMp3InDir("")
             return
-        self.MyYouTubeSearcherObj.PlayMp3InDir("")
-    def OnReadButton(self, evt):
+        self.CheckAndContinueIfIsEnabledContinuousMode("stop_after_end")
+
+    def OnDownloadButton(self, evt):
         global GlobalIfNowDownloading
         GlobalIfNowDownloading = 1
         self.check_auto_play.Disable()
