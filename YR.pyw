@@ -41,6 +41,11 @@ class ImageTools():
             self.parent.statusbar.SetStatusText("",1)
         except IOError:
             print "cannot create thumbnail"
+    def MergeTwoImagesToMerged(self,bg,fg):
+        background = Image.open(bg)
+        foreground = Image.open(fg)
+        background.paste(foreground, (0, 0), foreground)
+        background.save("merged.png", "PNG")
 class RelateFromHistoryRecommender():
     def __init__(self,parent):
         self.base_random_video_id = ""
@@ -111,7 +116,7 @@ class MyYouTubeSearcher():
         if(self.index-1>=0):
             self.index-=1
     def SetIndex(self,new):
-        if(new-1>=0)and(new+1<self.GetNumberOfFoundVideos()):
+        if(new-1>=0)and(new-1<self.GetNumberOfFoundVideos()):
             self.index = new-1
     def GetCurrentVideoId(self):
         global GlobalVideoIdForRelated
@@ -305,12 +310,33 @@ class HistoryStuff():
         self.history_list = list()
         self.in_history_mode = 0
         self.index = 0
+    def RemoveDuplicates(self):
+        reversed_list = self.history_list
+        reversed_list.reverse()
+        unique_list = list()
+        for i in reversed_list:
+            if i not in unique_list:
+                unique_list.append(i)
+        unique_list.reverse()
+        self.history_list = unique_list
+        self.SaveCurrentListToFile()
+    def SaveCurrentListToFile(self):
+        myfile = open("all_played_videos.txt", "w")
+        for videoId in self.history_list:
+            myfile.write("https://www.youtube.com/watch?v="+videoId+"\n")
+        myfile.close()
+    def DeleteCurrentItem(self):
+        del self.history_list[self.index]
+        self.DecrementIndex()
+        self.SaveCurrentListToFile()
     def GetCurrentVideoId(self):
         return self.history_list[self.GetIndex()]
     def EnableDisableHistoryMode(self,val):
         self.in_history_mode = val
         if(val == 0):
             self.history_list = list()
+        else:
+            self.RemoveDuplicates()
         self.index = self.GetSizeOfHistory()-1
     def GetIndex(self):
         return self.index
@@ -321,7 +347,7 @@ class HistoryStuff():
         if(self.index-1>=0):
             self.index-=1
     def SetIndex(self,new):
-        if(new-1>=0)and(new+1<self.GetSizeOfHistory()):
+        if(new-1>=0)and(new-1<self.GetSizeOfHistory()):
             self.index = new-1
     def CheckIfInHistoryMode(self):
         return self.in_history_mode
@@ -418,7 +444,6 @@ class MyFrame(wx.Frame):
         self.index_info = wx.StaticText(self.panel, -1, "")
         self.search_by_thumbnail_btn = wx.Button(self.panel, -1, "Search by thumbnail")
         self.main_image_thumb = wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(320, 240))
-
         self.open_in_browser_btn = wx.Button(self.panel, -1, "Open in browser")
         self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
         self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
@@ -469,6 +494,7 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnRecommendButtonPressed, self.recommend_btn)
         self.main_image_thumb.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitMainThumbnail)
+        self.main_image_thumb.Bind(wx.EVT_LEFT_DOWN, self.OnClickMainThumbnail)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -522,11 +548,27 @@ class MyFrame(wx.Frame):
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
+    def OnClickMainThumbnail(self,evt):
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "":
+            dlg = wx.MessageDialog(None, 'Item will be deleted from history.', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
+            result = dlg.ShowModal()
+            if result == wx.ID_NO:
+                return
+            self.HistoryStuffObj.DeleteCurrentItem()
+            self.RefreshSongInfo()
     def OnHoverMainThumbnail(self,evt):
         global GlobalVideoIdForRelated
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "":
+            self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            self.MyImageToolsObj.MergeTwoImagesToMerged("file.png","trash.png")
+            self.main_image_thumb.SetBitmap(wx.Bitmap("merged.png",wx.BITMAP_TYPE_ANY))
+        else:
+            self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
         if not ((self.MyYouTubeSearcherObj.number_of_found_videos == 0) and (GlobalVideoIdForRelated=="") and (self.HistoryStuffObj.GetSizeOfHistory() == 0)):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(""))
     def OnExitMainThumbnail(self,evt):
+        if self.HistoryStuffObj.CheckIfInHistoryMode():
+            self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
         self.statusbar.SetStatusText("")
     def OnRecommendButtonPressed(self,evt):
         global GlobalVideoIdForRelated
@@ -775,7 +817,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.AppendToHistoryFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.20")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.30")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
