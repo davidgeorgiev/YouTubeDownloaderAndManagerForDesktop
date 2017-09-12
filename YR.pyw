@@ -22,7 +22,9 @@ class MyYouTubeSearcher():
         self.full_data_info = ""
         self.content_details = ""
         self.t1 = 0
-        self.DeleteAllMp3()
+        self.ext = 'mp3'
+    def SetExt(self,param):
+        self.ext = param
     def GetNumberOfFoundVideos(self):
         return len(self.data_info)-2
     def SearchPlease(self,query):
@@ -58,9 +60,9 @@ class MyYouTubeSearcher():
             mul*=60
         return str(sum_seconds)
     def GetTitle(self):
-        return re.sub('[^A-Za-z0-9]+', ' ', self.full_data_info["items"][0]["snippet"]["title"])
+        return str(re.sub('[^A-Za-z0-9]+', ' ', str(self.full_data_info["items"][0]["snippet"]["title"])))
     def SaveThumbByIndex(self,index):
-        print(self.GetNumberOfFoundVideos())
+        #print(self.GetNumberOfFoundVideos())
         if self.GetNumberOfFoundVideos()==3:
             self.parent.text.SetLabel("")
             self.parent.duration_info.SetLabel("")
@@ -73,12 +75,26 @@ class MyYouTubeSearcher():
         testfile.retrieve(thumb_url, "file.jpg")
         self.parent.statusbar.SetStatusText('Done')
     def DownloadMp3ByIndex(self,index):
-        self.parent.statusbar.SetStatusText('Downloading mp3...')
+        self.parent.statusbar.SetStatusText('Downloading '+self.ext+'...')
         #json_url = "http://www.youtubeinmp3.com/fetch/?format=JSON&video=https://www.youtube.com/watch?v="+self.data_info["items"][index]["id"]["videoId"]
         #content = urllib2.urlopen(json_url).read()
         #mp3_info = json.loads(content)
         #print mp3_info["link"]
-        command = 'youtubedl\\youtubedl.exe "https://www.youtube.com/watch?v='+self.data_info["items"][index]["id"]["videoId"]+'" --extract-audio --audio-format mp3'
+        hight_quality_parameters = ''
+        format_parameters = ''
+
+        if self.parent.IfVideo('just check') == 0:
+            if self.parent.IfHightQuality() == 1:
+                hight_quality_parameters+='-f webm --audio-quality 0'
+            format_parameters = '--extract-audio --audio-format mp3'
+        else:
+            if self.parent.IfHightQuality() == 1:
+                hight_quality_parameters = '-f best'
+            else:
+                hight_quality_parameters = '-f "best[height<500]"'
+            format_parameters = "--merge-output-format mp4"
+        os.system('del '+'"downloads\\'+self.GetTitle()[:30].replace(" ","_")+'_'+str(self.data_info["items"][self.index]["id"]["videoId"])+'.'+self.ext+'"')
+        command = 'youtubedl\\youtubedl.exe "https://www.youtube.com/watch?v='+self.data_info["items"][index]["id"]["videoId"]+'" '+hight_quality_parameters+' '+format_parameters+' -o "./downloads/'+'%'+'(title)s.'+'%'+'(ext)s"'
         self.AppendToLogFile('https://www.youtube.com/watch?v='+self.data_info["items"][index]["id"]["videoId"])
         os.system(command)
         self.parent.statusbar.SetStatusText('Done')
@@ -89,27 +105,29 @@ class MyYouTubeSearcher():
         self.t_timer = threading.Thread(target=self.parent.RunTimer)
         self.t_timer.daemon = True
         self.t_timer.start()
-        os.startfile("mp3.mp3", 'open')
+        os.startfile('downloads\\'+self.GetTitle()[:30].replace(" ","_")+'_'+str(self.data_info["items"][self.index]["id"]["videoId"])+"."+self.ext, 'open')
     def PlayMp3InDir(self,event):
         self.parent.statusbar.SetStatusText('Playing music...')
         self.RenameMp3File()
         self.LetsHearTheSong()
         self.parent.statusbar.SetStatusText('Done')
     def DeleteAllMp3(self):
+        self.parent.statusbar.SetStatusText('Deleting all downloads...')
         self.StopMusic()
         time.sleep(2)
-        os.system('del "'+os.path.join(os.getcwd(),"*.mp3")+'"')
+        os.system('del /Q "'+os.getcwd()+"\\downloads\\*")
+        self.parent.statusbar.SetStatusText('Done')
     def RenameMp3File(self):
         self.StopMusic()
         time.sleep(2)
-        os.system('rename "'+os.path.join(os.getcwd(),"*.mp3")+'" "'+'mp3.mp3'+'"')
+        os.system('rename "'+os.path.join(os.getcwd()+"\\downloads\\","*."+self.ext)+'" "'+self.GetTitle()[:30].replace(" ","_")+'_'+str(self.data_info["items"][self.index]["id"]["videoId"])+'.'+self.ext+'"')
 
     def StopMusic(self):
         os.startfile("no sound\\no.mp3", 'open')
     def GetRandomWord(self):
         url = "http://setgetgo.com/randomword/get.php"
         content = urllib2.urlopen(url).read()
-        print content
+        #print content
         self.parent.search_text.SetValue(content+" music")
 class MyFrame(wx.Frame):
     """
@@ -117,10 +135,11 @@ class MyFrame(wx.Frame):
     and has a simple menu.
     """
     def __init__(self, parent, title):
+        self.IfVideoTrigger = 0
         self.remaining_time_in_seconds_for_timer_data = 0
         self.MyYouTubeSearcherObj = MyYouTubeSearcher(self)
 
-        wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(370, 630),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
+        wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(725, 572),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
         self.Center()
 
 
@@ -150,6 +169,8 @@ class MyFrame(wx.Frame):
 
         # and a few controls
         self.check_random_search = wx.CheckBox(self.panel, label = 'random search',pos = (10,10))
+        self.check_hight_quality = wx.CheckBox(self.panel, label = 'hight quality',pos = (10,10))
+        self.check_mp4_or_mp3 = wx.Button(self.panel, -1, self.MyYouTubeSearcherObj.ext)
         self.text = wx.StaticText(self.panel, -1, "")
         self.duration_info = wx.StaticText(self.panel, -1, "")
         self.text.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
@@ -161,16 +182,19 @@ class MyFrame(wx.Frame):
         self.prevbtn = wx.Button(self.panel, -1, "Prev")
         self.nextbtn = wx.Button(self.panel, -1, "Next")
 
-        self.browser = wx.html2.WebView.New(self.panel)
+        self.browser = wx.html2.WebView.New(self.panel,size=(390, 275))
 
         self.remaining_time_seconds = wx.StaticText(self.panel, -1, "")
         self.remaining_time_seconds.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
         self.remaining_time_seconds.SetSize(self.remaining_time_seconds.GetBestSize())
 
         self.open_in_browser_btn = wx.Button(self.panel, -1, "Open in browser")
+        self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
         # bind the button events to handlers
+        self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
         self.Bind(wx.EVT_BUTTON, self.OnSmartButton, self.smartbtn)
         self.Bind(wx.EVT_BUTTON, self.OnOpenInBrowser, self.open_in_browser_btn)
+        self.Bind(wx.EVT_BUTTON, self.OnDeleteDownloads, self.delete_downloads_btn)
         self.Bind(wx.EVT_BUTTON, self.OnLetSPlayMusic, self.playbtn)
         self.Bind(wx.EVT_BUTTON, self.PrevSong, self.prevbtn)
         self.Bind(wx.EVT_BUTTON, self.NextSong, self.nextbtn)
@@ -178,28 +202,37 @@ class MyFrame(wx.Frame):
 
         # Use a sizer to layout the controls, stacked vertically and with
         # a 10 pixel border around each
-        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        self.main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.left_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.right_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer1 = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer2 = wx.BoxSizer(wx.HORIZONTAL)
         self.sizer3 = wx.BoxSizer(wx.HORIZONTAL)
+        self.sizer4 = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.sizer.Add(self.check_random_search,0,wx.ALL,10)
+        self.sizer1.Add(self.check_random_search,0,wx.ALL,10)
+        self.sizer1.Add(self.check_hight_quality,0,wx.ALL,10)
+        self.sizer1.Add(self.check_mp4_or_mp3,0,wx.ALL,10)
         self.sizer2.Add(self.smartbtn, 0, wx.ALL, 10)
         self.sizer2.Add(self.playbtn, 0, wx.ALL, 10)
         self.sizer2.Add(self.search_text,flag=wx.ALIGN_CENTER)
         self.sizer3.Add(self.prevbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.nextbtn, 0, wx.ALL, 10)
-        self.sizer.Add(self.sizer2)
-        self.sizer.Add(self.text, 0, wx.ALL, 10)
-        self.sizer.Add(self.duration_info, 0, wx.ALL, 10)
+        self.left_sizer.Add(self.sizer1)
+        self.left_sizer.Add(self.sizer2)
+        self.right_sizer.Add(self.text, 0, wx.ALL, 10)
+        self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
 
-        self.sizer.Add(self.browser, 1, wx.EXPAND, 10)
-        self.sizer.Add(self.remaining_time_seconds, 0, wx.ALL, 10)
-        self.sizer.Add(self.sizer3)
-        self.sizer.Add(self.open_in_browser_btn, 0, wx.ALL, 10)
+        self.right_sizer.Add(self.browser, proportion=0, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.right_sizer.Add(self.remaining_time_seconds, 0, wx.ALL, 10)
+        self.right_sizer.Add(self.sizer3)
+        self.sizer4.Add(self.open_in_browser_btn, 0, wx.ALL, 10)
+        self.sizer4.Add(self.delete_downloads_btn, 0, wx.ALL, 10)
+        self.right_sizer.Add(self.sizer4)
+        self.main_sizer.Add(self.left_sizer)
+        self.main_sizer.Add(self.right_sizer)
 
-
-
-        self.panel.SetSizer(self.sizer)
+        self.panel.SetSizer(self.main_sizer)
         self.panel.Layout()
 
         self.browser.SetPage('<img src="'+os.getcwd()+'\\no.png" alt="no image" height="240" width="320">',"")
@@ -207,7 +240,28 @@ class MyFrame(wx.Frame):
         self.open_in_browser_btn.Disable()
         self.prevbtn.Disable()
         self.nextbtn.Disable()
-
+        self.check_hight_quality.SetValue(1)
+    def OnDeleteDownloads(self,evt):
+        dlg = wx.MessageDialog(None, 'All download files will be deleted?', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
+        result = dlg.ShowModal()
+        if result == wx.ID_NO:
+            return
+        self.MyYouTubeSearcherObj.DeleteAllMp3()
+    def IfVideo(self,evt):
+        if(evt!='just check'):
+            self.IfVideoTrigger = not self.IfVideoTrigger
+        if(self.IfVideoTrigger==1):
+            self.MyYouTubeSearcherObj.SetExt("mp4")
+            #print "MP4"
+            self.check_mp4_or_mp3.SetLabel(self.MyYouTubeSearcherObj.ext)
+            return 1
+        else:
+            self.MyYouTubeSearcherObj.SetExt("mp3")
+            #print "MP3"
+            self.check_mp4_or_mp3.SetLabel(self.MyYouTubeSearcherObj.ext)
+            return 0
+    def IfHightQuality(self):
+        return self.check_hight_quality.GetValue()
     def OnRestart(self, evt):
         self.Destroy()
     def OnTimeToClose(self, evt):
@@ -234,7 +288,6 @@ class MyFrame(wx.Frame):
 
     def OnLetSPlayMusic(self, evt):
         self.StopTimer()
-        self.MyYouTubeSearcherObj.DeleteAllMp3()
         self.remaining_time_in_seconds_for_timer_data = int(self.MyYouTubeSearcherObj.GetDuration())
         self.t1 = threading.Thread(target=self.SmartBtnThread)
         self.t1.daemon = True
@@ -262,7 +315,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.SaveThumbByIndex(self.MyYouTubeSearcherObj.index)
         self.MyYouTubeSearcherObj.LoadStatisticsAndInformationByIndex(self.MyYouTubeSearcherObj.index)
         self.MyYouTubeSearcherObj.LoadContentDetailsByIndex(self.MyYouTubeSearcherObj.index)
-        self.browser.SetPage('<img src="'+os.getcwd()+'\\file.jpg" alt="'+self.MyYouTubeSearcherObj.GetTitle().encode(encoding='UTF-8',errors='strict')+'" height="240" width="320">',"")
+        self.browser.SetPage('<img src="'+os.getcwd()+'\\file.jpg" alt="'+self.MyYouTubeSearcherObj.GetTitle()+'" height="240" width="320">',"")
         self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitle())
         self.duration_info.SetLabel("duration in seconds = "+self.MyYouTubeSearcherObj.GetDuration())
         self.panel.Layout()
@@ -271,21 +324,23 @@ class MyFrame(wx.Frame):
             time.sleep(1)
             self.remaining_time_in_seconds_for_timer_data-=1
             self.remaining_time_seconds.SetLabel(str(self.remaining_time_in_seconds_for_timer_data)+" seconds remaining")
-        self.playbtn.Enable()
 
         self.remaining_time_seconds.SetLabel("")
     def SmartBtnThread(self):
         self.OnReadButton("")
 
         self.MyYouTubeSearcherObj.PlayMp3InDir("")
-        self.smartbtn.Enable()
     def OnReadButton(self, evt):
         """Event handler for the button click."""
-        self.smartbtn.Disable()
         self.playbtn.Disable()
+        self.check_mp4_or_mp3.Disable()
+        self.check_hight_quality.Disable()
+        self.delete_downloads_btn.Disable()
         self.MyYouTubeSearcherObj.DownloadMp3ByIndex(self.MyYouTubeSearcherObj.index)
-        self.smartbtn.Enable()
         self.playbtn.Enable()
+        self.check_mp4_or_mp3.Enable()
+        self.check_hight_quality.Enable()
+        self.delete_downloads_btn.Enable()
     def OnOpenInBrowser(self,event):
         #self.StopTimer()
         #self.MyYouTubeSearcherObj.StopMusic()
@@ -294,7 +349,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.AppendToLogFile('https://www.youtube.com/watch?v='+self.MyYouTubeSearcherObj.data_info["items"][self.MyYouTubeSearcherObj.index]["id"]["videoId"])
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v1.10")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v1.30")
         self.SetTopWindow(frame)
 
         frame.Show(True)
