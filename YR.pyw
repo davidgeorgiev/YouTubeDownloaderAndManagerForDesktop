@@ -50,6 +50,46 @@ class ImageTools():
         foreground = Image.open(fg)
         background.paste(foreground, (0, 0), foreground)
         background.save("merged.png", "PNG")
+
+    def GetAvgColorOfAnImage(self,img_url,sum_val):
+        im = Image.open("file.png")
+        i = 0
+        red_counter = 0
+        red_sum = 0
+        green_counter = 0
+        green_sum = 0
+        blue_counter = 0
+        blue_sum = 0
+        for value in im.histogram():
+            if value>0 and value<256:
+                red_counter+=1
+                red_sum+=value
+            if value>255 and value<511:
+                green_counter+=1
+                green_sum+=value-255
+            if value>510 and value<766:
+                blue_counter+=1
+                blue_sum+=value-510
+            i+=1
+        avg_red = red_sum/red_counter
+        avg_green = green_sum/green_counter
+        avg_blue = blue_sum/blue_counter
+        avg_red += sum_val
+        avg_green += sum_val
+        avg_blue += sum_val
+        if(avg_red>255):
+            avg_red=255
+        if(avg_red<0):
+            avg_red=0
+        if(avg_green>255):
+            avg_green=255
+        if(avg_green<0):
+            avg_red=0
+        if(avg_blue>255):
+            avg_blue=255
+        if(avg_blue<0):
+            avg_blue=0
+        return "RGB("+str(avg_red)+","+str(avg_green)+","+str(avg_blue)+")"
 class RelateFromHistoryRecommender():
     def __init__(self,parent):
         self.base_random_video_id = ""
@@ -614,7 +654,6 @@ class MyFrame(wx.Frame):
         # set main sizer to panel
         self.panel.SetSizer(self.main_sizer)
         self.panel.Layout()
-
         # some start GUI configurations
 
         self.playbtn.Disable()
@@ -869,8 +908,12 @@ class MyFrame(wx.Frame):
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
         if(img_downloaded):
-        	self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
+            self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("file.png",150))
+            self.panel.Refresh()
+            self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
         else:
+            self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("no.png",150))
+            self.panel.Refresh()
             self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
         self.open_in_browser_btn.Enable()
         self.search_by_thumbnail_btn.Enable()
