@@ -104,7 +104,10 @@ class RelateFromHistoryRecommender():
     def GetRecommendedVideoId(self):
         self.parent.parent.statusbar.SetStatusText("Analyzing history and get video",1)
         self.AnalyzeHistoryFileAndGetRandomVideo()
-        videoIds = self.parent.GetRelatedIds(self.parent.RequestRelatedVideosDictByVideoWithId(self.base_random_video_id))
+        result_dict = self.parent.RequestRelatedVideosDictByVideoWithId(self.base_random_video_id)
+        if(self.parent.parent.check_hight_quality.GetValue()):
+            result_dict = self.parent.FilterHdResults(result_dict)
+        videoIds = self.parent.GetRelatedIds(result_dict)
         shuffle(videoIds)
         return videoIds[0]
         self.parent.parent.statusbar.SetStatusText("",1)
@@ -182,6 +185,54 @@ class MyYouTubeSearcher():
         return self.GetTitle()[:30].replace(" ","_")+'_'+str(self.GetCurrentVideoId())+'.'+self.ext
     def SetExt(self,param):
         self.ext = param
+    def RefreshNumberOfFoundVideos(self):
+        self.number_of_found_videos = len(self.data_info["items"])
+    def FilterHdResults(self,arg_dict):
+        the_dict = arg_dict
+        indexes_for_delete = list()
+        i = 0
+        videoIds = list()
+        for key in arg_dict:
+            if(key == "items"):
+                arg_check = "dict"
+            else:
+                arg_check = "list"
+        if(arg_check == "dict"):
+            for videoIdDict in the_dict["items"]:
+                for key in videoIdDict:
+                    if key == "snippet":
+                        videoIds.append(videoIdDict["snippet"]["resourceId"]["videoId"])
+                    else:
+                        videoIds.append(videoIdDict["id"]["videoId"])
+        else:
+            videoIds = arg_dict
+        counter = float(0)
+        percent = int(0)
+        size = float(len(videoIds))
+        for videoId in videoIds:
+            counter+=1
+            if(size!=0):
+                percent = counter/(size/100)
+            self.parent.statusbar.SetStatusText("Checking definitions: "+str(int(percent))+"%",1)
+            url = "https://www.googleapis.com/youtube/v3/videos?id="+videoId+"&part=contentDetails&fields=items(contentDetails(definition))&key="+api_key
+            content = urllib2.urlopen(url).read()
+            definition = json.loads(content)
+            if(len(definition["items"])>0):
+                if(definition["items"][0]["contentDetails"]["definition"]!="hd"):
+                    indexes_for_delete.append(i)
+            else:
+                indexes_for_delete.append(i)
+            i += 1
+        indexes_for_delete.reverse()
+        if(arg_check == "dict"):
+            for index_for_delete in indexes_for_delete:
+                del the_dict["items"][index_for_delete]
+            return the_dict
+        elif(arg_check == "list"):
+            for index_for_delete in indexes_for_delete:
+                del videoIds[index_for_delete]
+            return videoIds
+        self.parent.statusbar.SetStatusText("",1)
     def SearchPlease(self,query):
         self.parent.current_main_title = "Search videos: "+query
         self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
@@ -193,7 +244,7 @@ class MyYouTubeSearcher():
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
-        self.number_of_found_videos = len(self.data_info[u"items"])
+        self.RefreshNumberOfFoundVideos()
         self.parent.statusbar.SetStatusText("",1)
     def SearchListPlease(self,query):
         self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
@@ -225,14 +276,18 @@ class MyYouTubeSearcher():
     def LoadContentDetails(self):
         self.parent.statusbar.SetStatusText("Loading content details...",1)
         self.content_details = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&fields=items(contentDetails(duration))&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
         self.parent.statusbar.SetStatusText("",1)
     def RequestRelatedVideosDictByVideoWithId(self,videoId):
+        if(self.parent.check_hight_quality.GetValue()):
+            max_results = "12"
+        else:
+            max_results = "6"
         self.parent.statusbar.SetStatusText("Requesting related videos dictionary...",1)
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults=6&type=video&fields=items(id(videoId))&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults="+max_results+"&type=video&fields=items(id(videoId))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         return json.loads(content)
@@ -240,6 +295,8 @@ class MyYouTubeSearcher():
     def LoadRelatedVideos(self):
         self.related_videos = dict()
         self.related_videos = self.RequestRelatedVideosDictByVideoWithId(self.GetCurrentVideoId())
+        if(self.parent.check_hight_quality.GetValue()):
+            self.related_videos = self.FilterHdResults(self.related_videos)
         self.SaveRelatedThumbs()
         self.parent.RefreshRelatedThumbs()
     def GetRelatedIds(self,related_videos_dict):
@@ -420,16 +477,18 @@ class HistoryStuff():
                 unique_list.append(i)
         unique_list.reverse()
         self.history_list = unique_list
-        self.SaveCurrentListToFile()
-    def SaveCurrentListToFile(self):
+        self.SaveListToFile(self.history_list)
+    def SaveListToFile(self, arg_list):
         myfile = open("all_played_videos.txt", "w")
-        for videoId in self.history_list:
+        for videoId in arg_list:
             myfile.write("https://www.youtube.com/watch?v="+videoId+"\n")
         myfile.close()
     def DeleteCurrentItem(self):
+        history_list = self.ReadHistoryFromFile()
+        history_list.remove(self.history_list[self.index])
         del self.history_list[self.index]
         self.DecrementIndex()
-        self.SaveCurrentListToFile()
+        self.SaveListToFile(history_list)
     def GetCurrentVideoId(self):
         return self.history_list[self.GetIndex()]
     def EnableDisableHistoryMode(self,val):
@@ -438,6 +497,8 @@ class HistoryStuff():
             self.history_list = list()
         else:
             self.RemoveDuplicates()
+            if(self.parent.check_hight_quality.GetValue()):
+                self.history_list = self.parent.MyYouTubeSearcherObj.FilterHdResults(self.history_list)
             self.parent.current_main_title = "Your History"
         self.index = self.GetSizeOfHistory()-1
     def GetIndex(self):
@@ -469,8 +530,8 @@ class HistoryStuff():
             content[i] = item.replace("https://www.youtube.com/watch?v=","").replace("\n","")
             i+=1
         #content.reverse()
-        self.history_list = content
         self.parent.statusbar.SetStatusText("",1)
+        return content
     def GetSizeOfHistory(self):
         return len(self.history_list)
 class MyFrame(wx.Frame):
@@ -710,7 +771,7 @@ class MyFrame(wx.Frame):
         GlobalVideoIdForRelated = ""
         global GlobalIfNowDownloading
         #self.history_btn.Disable()
-        self.HistoryStuffObj.ReadHistoryFromFile()
+        self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
@@ -726,6 +787,8 @@ class MyFrame(wx.Frame):
         i = 0
         self.UnloadRelatedThumbs()
         for my_id in ids:
+            if i > 5:
+                break
             img_address_local = "./related_images/"+my_id+"-"+str(self.related_thumbnails_current_indexes[i])+".jpg"
             if os.path.isfile(img_address_local):
                 self.sBitMaps[i].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
@@ -806,6 +869,9 @@ class MyFrame(wx.Frame):
         else:
 
             self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
+        if(self.check_hight_quality.GetValue()):
+            self.MyYouTubeSearcherObj.data_info = self.MyYouTubeSearcherObj.FilterHdResults(self.MyYouTubeSearcherObj.data_info)
+            self.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.UnloadRelatedThumbs()
             self.text.SetLabel("No Results!")
