@@ -105,8 +105,8 @@ class RelateFromHistoryRecommender():
         self.parent.parent.statusbar.SetStatusText("Analyzing history and get video",1)
         self.AnalyzeHistoryFileAndGetRandomVideo()
         result_dict = self.parent.RequestRelatedVideosDictByVideoWithId(self.base_random_video_id)
-        if(self.parent.parent.check_hight_quality.GetValue()):
-            result_dict = self.parent.FilterHdResults(result_dict)
+        if(self.parent.parent.CheckIfSomeFilterSet()):
+            result_dict = self.parent.FilterResults(result_dict)
         videoIds = self.parent.GetRelatedIds(result_dict)
         shuffle(videoIds)
         return videoIds[0]
@@ -175,7 +175,7 @@ class MyYouTubeSearcher():
         if(self.parent.HistoryStuffObj.CheckIfInHistoryMode()):
             return self.parent.HistoryStuffObj.GetCurrentVideoId()
         else:
-            if(self.parent.check_playlist_search.GetValue()):
+            if(self.parent.search_for_list_menu_checkbox.IsChecked()):
                 return self.data_info["items"][self.GetIndex()]["snippet"]["resourceId"]["videoId"]
             else:
                 return self.data_info["items"][self.GetIndex()]["id"]["videoId"]
@@ -187,7 +187,7 @@ class MyYouTubeSearcher():
         self.ext = param
     def RefreshNumberOfFoundVideos(self):
         self.number_of_found_videos = len(self.data_info["items"])
-    def FilterHdResults(self,arg_dict):
+    def FilterResults(self,arg_dict):
         the_dict = arg_dict
         indexes_for_delete = list()
         i = 0
@@ -213,13 +213,20 @@ class MyYouTubeSearcher():
             counter+=1
             if(size!=0):
                 percent = counter/(size/100)
-            self.parent.statusbar.SetStatusText("Checking definitions: "+str(int(percent))+"%",1)
-            url = "https://www.googleapis.com/youtube/v3/videos?id="+videoId+"&part=contentDetails&fields=items(contentDetails(definition))&key="+api_key
+            self.parent.statusbar.SetStatusText("Filtering: "+str(int(percent))+"%",1)
+            url = "https://www.googleapis.com/youtube/v3/videos?id="+videoId+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+api_key
             content = urllib2.urlopen(url).read()
-            definition = json.loads(content)
-            if(len(definition["items"])>0):
-                if(definition["items"][0]["contentDetails"]["definition"]!="hd"):
-                    indexes_for_delete.append(i)
+            contents = json.loads(content)
+            if(len(contents["items"])>0):
+                if(self.parent.check_show_only_HD.GetValue()):
+                    if(contents["items"][0]["contentDetails"]["definition"]!="hd"):
+                        indexes_for_delete.append(i)
+                if(self.parent.min_min_edit.GetValue() and self.parent.max_min_edit.GetValue()):
+                    duration = isodate.parse_duration(contents["items"][0]["contentDetails"]["duration"])
+                    duration_in_minutes = duration.total_seconds()/60
+                    if(duration_in_minutes <= int(self.parent.min_min_edit.GetValue()) or duration_in_minutes >= int(self.parent.max_min_edit.GetValue())):
+                        if i not in indexes_for_delete:
+                            indexes_for_delete.append(i)
             else:
                 indexes_for_delete.append(i)
             i += 1
@@ -295,8 +302,8 @@ class MyYouTubeSearcher():
     def LoadRelatedVideos(self):
         self.related_videos = dict()
         self.related_videos = self.RequestRelatedVideosDictByVideoWithId(self.GetCurrentVideoId())
-        if(self.parent.check_hight_quality.GetValue()):
-            self.related_videos = self.FilterHdResults(self.related_videos)
+        if(self.parent.CheckIfSomeFilterSet()):
+            self.related_videos = self.FilterResults(self.related_videos)
         self.SaveRelatedThumbs()
         self.parent.RefreshRelatedThumbs()
     def GetRelatedIds(self,related_videos_dict):
@@ -497,8 +504,8 @@ class HistoryStuff():
             self.history_list = list()
         else:
             self.RemoveDuplicates()
-            if(self.parent.check_hight_quality.GetValue()):
-                self.history_list = self.parent.MyYouTubeSearcherObj.FilterHdResults(self.history_list)
+            if(self.parent.CheckIfSomeFilterSet()):
+                self.history_list = self.parent.MyYouTubeSearcherObj.FilterResults(self.history_list)
             self.parent.current_main_title = "Your History"
         self.index = self.GetSizeOfHistory()-1
     def GetIndex(self):
@@ -555,21 +562,56 @@ class MyFrame(wx.Frame):
         wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=(660, 615),style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER)
         self.Center()
 
-
+        #CONSTANTS
+        self.APP_EXIT = 1
+        self.APP_HISTORY = 2
+        self.APP_RECOMMEND = 3
+        self.APP_OPEN_IN_BROWSER = 4
+        self.APP_DELETE_DOWNLOADS = 5
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
-        self.menu = wx.Menu()
+        self.fileMenu = wx.Menu()
+        self.searchMenu = wx.Menu()
         # add an item to the menu, using \tKeyName automatically
         # creates an accelerator, the third param is some help text
         # that will show up in the statusbar
-        self.menu.Append(wx.ID_EXIT, "E&xit\tAlt-X", "Exit this simple sample")
+        quit_menu_item = wx.MenuItem(self.fileMenu, self.APP_EXIT, '&Quit')
+        quit_menu_item.SetBitmap(wx.Bitmap('exit.png'))
+        self.fileMenu.AppendItem(quit_menu_item)
+
+        self.random_search_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Random search', 'Random search', kind=wx.ITEM_CHECK)
+        self.search_for_list_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Search for list', 'Search for list', kind=wx.ITEM_CHECK)
+        self.searchMenu.Check(self.random_search_menu_checkbox.GetId(), False)
+        self.searchMenu.Check(self.search_for_list_menu_checkbox.GetId(), False)
+
         # bind the menu event to an event handler
-        self.Bind(wx.EVT_MENU, self.OnTimeToClose, id=wx.ID_EXIT)
+        self.Bind(wx.EVT_MENU, self.OnTimeToClose, id=self.APP_EXIT)
+        self.Bind(wx.EVT_MENU, self.OnStartHistoryMode, id=self.APP_HISTORY)
+        self.Bind(wx.EVT_MENU, self.OnRecommendButtonPressed, id=self.APP_RECOMMEND)
+
+
         # and put the menu on the menubar
-        self.menuBar.Append(self.menu, "&File")
+        self.menuBar.Append(self.fileMenu, "&File")
+        self.menuBar.Append(self.searchMenu, "&Search options")
+
         self.SetMenuBar(self.menuBar)
 
+        # TOOLBAR
+        self.toolbar = self.CreateToolBar()
+        delete_downloads_tool = self.toolbar.AddLabelTool(self.APP_DELETE_DOWNLOADS, 'Delete Downloads', wx.Bitmap('delete_downloads.png'))
+        self.Bind(wx.EVT_TOOL, self.OnDeleteDownloads, delete_downloads_tool)
+        open_in_browser_tool = self.toolbar.AddLabelTool(self.APP_OPEN_IN_BROWSER, 'Open In Browser', wx.Bitmap('open_in_browser.png'))
+        self.Bind(wx.EVT_TOOL, self.OnOpenInBrowser, open_in_browser_tool)
+        recommend_tool = self.toolbar.AddLabelTool(self.APP_RECOMMEND, "Recommend for you", wx.Bitmap('recommend.png'))
+        self.Bind(wx.EVT_TOOL, self.OnRecommendButtonPressed, recommend_tool)
+        history_tool = self.toolbar.AddLabelTool(self.APP_HISTORY, 'History', wx.Bitmap('history.png'))
+        self.Bind(wx.EVT_TOOL, self.OnStartHistoryMode, history_tool)
+
+
+
+
+        self.toolbar.Realize()
         # statusbar initialization
         self.statusbar = self.CreateStatusBar(2)
 
@@ -589,12 +631,17 @@ class MyFrame(wx.Frame):
         self.sizer5 = wx.BoxSizer(wx.HORIZONTAL)
         self.thumblails_sizer_l = wx.BoxSizer(wx.VERTICAL)
         self.thumblails_sizer_r = wx.BoxSizer(wx.VERTICAL)
-        self.history_and_recommendator_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.hq_mp3_or_mp4_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.search_box_btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # and a few controls
-        self.check_random_search = wx.CheckBox(self.panel, label = 'random search',pos = (10,10))
+        self.check_show_only_HD = wx.CheckBox(self.panel, label = 'Only HD',pos = (10,10))
+        self.filter_label_from = wx.StaticText(self.panel, -1, "from")
+        self.filter_label_to = wx.StaticText(self.panel, -1, "to")
+        self.filter_label_minutes = wx.StaticText(self.panel, -1, "minutes")
+        self.min_min_edit = wx.TextCtrl(self.panel,size=(20, -1))
+        self.max_min_edit = wx.TextCtrl(self.panel,size=(20, -1))
         self.check_hight_quality = wx.CheckBox(self.panel, label = 'HQ',pos = (10,10))
         self.check_auto_play = wx.CheckBox(self.panel, label = 'auto play',pos = (10,10))
         self.check_mp4_or_mp3 = wx.Button(self.panel, -1, self.MyYouTubeSearcherObj.ext, size=(40, 25))
@@ -613,12 +660,7 @@ class MyFrame(wx.Frame):
         self.index_info = wx.StaticText(self.panel, -1, "")
         self.search_by_thumbnail_btn = wx.Button(self.panel, -1, "Search by thumbnail")
         self.main_image_thumb = wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(320, 240))
-        self.open_in_browser_btn = wx.Button(self.panel, -1, "Open in browser")
-        self.delete_downloads_btn = wx.Button(self.panel, -1, "Delete downloads")
         self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
-        self.history_btn = wx.Button(self.panel, -1, "History mode")
-        self.recommend_btn = wx.Button(self.panel, -1, "Recommended for you")
-        self.check_playlist_search = wx.CheckBox(self.panel, label = 'search for list',pos = (10,10))
         self.check_continuous_play = wx.CheckBox(self.panel, label = 'continuous',pos = (10,10))
 
         # GRID OF THUMBNAILS
@@ -651,18 +693,13 @@ class MyFrame(wx.Frame):
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
         self.Bind(wx.EVT_BUTTON, self.OnSmartButton, self.smartbtn)
-        self.Bind(wx.EVT_BUTTON, self.OnOpenInBrowser, self.open_in_browser_btn)
-        self.Bind(wx.EVT_BUTTON, self.OnDeleteDownloads, self.delete_downloads_btn)
         self.Bind(wx.EVT_BUTTON, self.OnOpenDownloads, self.go_to_downloads_btn)
         self.Bind(wx.EVT_BUTTON, self.OnDownloadFile, self.playbtn)
         self.Bind(wx.EVT_BUTTON, self.PrevSong, self.prevbtn)
         self.Bind(wx.EVT_BUTTON, self.NextSong, self.nextbtn)
-        self.Bind(wx.EVT_BUTTON, self.OnStartHistoryMode, self.history_btn)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnChangeIndex, self.index_info_edit)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnSmartButton, self.search_text)
         self.Bind(wx.EVT_BUTTON, self.OnSearchByThumbnailButton, self.search_by_thumbnail_btn)
-        self.Bind(wx.EVT_CHECKBOX, self.OnChangeCheckboxRandomSearch, self.check_random_search)
-        self.Bind(wx.EVT_BUTTON, self.OnRecommendButtonPressed, self.recommend_btn)
         self.main_image_thumb.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEFT_DOWN, self.OnClickMainThumbnail)
@@ -674,15 +711,19 @@ class MyFrame(wx.Frame):
             self.thumblails_sizer_r.Add(self.sBitMaps[3+i], flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
 
         # Adding things to sizers
-        self.sizer1.Add(self.check_random_search,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
-        self.sizer1.Add(self.check_playlist_search,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.filter_sizer.Add(self.check_show_only_HD,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.filter_sizer.Add(self.filter_label_from, 0, wx.ALL, 10)
+        self.filter_sizer.Add(self.min_min_edit, 0, wx.ALL, 10)
+        self.filter_sizer.Add(self.filter_label_to, 0, wx.ALL, 10)
+        self.filter_sizer.Add(self.max_min_edit, 0, wx.ALL, 10)
+        self.filter_sizer.Add(self.filter_label_minutes, 0, wx.ALL, 10)
         self.sizer2.Add(self.playbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.prevbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.nextbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info_edit, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info, 0, wx.ALL, 10)
         self.left_sizer.Add(self.sizer1, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
-
+        self.left_sizer.Add(self.filter_sizer, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.search_box_btn_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
         self.search_box_btn_sizer.Add(self.smartbtn, 0, wx.ALL, 10)
         self.left_sizer.Add(self.search_box_btn_sizer, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
@@ -693,9 +734,6 @@ class MyFrame(wx.Frame):
         self.left_sizer.Add(self.hq_mp3_or_mp4_sizer)
         self.left_sizer.Add(self.sizer2)
         self.left_sizer.Add(self.left_sizer1)
-        self.history_and_recommendator_sizer.Add(self.history_btn, 0, wx.ALL, 10)
-        self.history_and_recommendator_sizer.Add(self.recommend_btn, 0, wx.ALL, 10)
-        self.left_sizer.Add(self.history_and_recommendator_sizer)
         self.left_sizer1.Add(self.thumblails_sizer_l, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer1.Add(self.thumblails_sizer_r, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.main_title_static_text, 0, wx.ALL, 10)
@@ -703,8 +741,6 @@ class MyFrame(wx.Frame):
         self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
         self.right_sizer.Add(self.main_image_thumb, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.sizer3)
-        self.sizer4.Add(self.open_in_browser_btn, 0, wx.ALL, 10)
-        self.sizer4.Add(self.delete_downloads_btn, 0, wx.ALL, 10)
         self.sizer5.Add(self.search_by_thumbnail_btn, 0, wx.ALL, 10)
         self.sizer5.Add(self.go_to_downloads_btn, 0, wx.ALL, 10)
         self.right_sizer.Add(self.sizer4)
@@ -718,12 +754,17 @@ class MyFrame(wx.Frame):
         # some start GUI configurations
 
         self.playbtn.Disable()
-        self.open_in_browser_btn.Disable()
+        self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
         self.search_by_thumbnail_btn.Disable()
         self.prevbtn.Disable()
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
+    def CheckIfSomeFilterSet(self):
+        if(self.check_show_only_HD.GetValue() or self.min_min_edit.GetValue() or self.max_min_edit.GetValue()):
+            return 1
+        else:
+            return 0
     def OnClickMainThumbnail(self,evt):
         if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "":
             dlg = wx.MessageDialog(None, 'Item will be deleted from history.', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
@@ -752,7 +793,7 @@ class MyFrame(wx.Frame):
         self.RefreshSongInfo()
         self.playbtn.Enable()
     def OnChangeCheckboxRandomSearch(self,evt):
-        if self.check_random_search.GetValue() == 1:
+        if self.random_search_menu_checkbox.IsChecked():
             self.user_input_backup = self.search_text.GetValue()
             self.search_text.Disable()
             self.search_text.SetValue("")
@@ -770,7 +811,6 @@ class MyFrame(wx.Frame):
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = ""
         global GlobalIfNowDownloading
-        #self.history_btn.Disable()
         self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
         self.RefreshSongInfo()
@@ -860,23 +900,23 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.EnableDisableHistoryMode(0)
         self.text.SetLabel("Searching...")
         self.duration_info.SetLabel("unavailable")
-        if(self.check_random_search.GetValue()==1) and evt!="related_is_called":
+        if(self.random_search_menu_checkbox.IsChecked()) and evt!="related_is_called":
             self.MyYouTubeSearcherObj.GetRandomWord()
         self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshPrevAndNextButtons()
-        if(self.check_playlist_search.GetValue()):
+        if(self.search_for_list_menu_checkbox.IsChecked()):
             self.MyYouTubeSearcherObj.SearchListPlease(self.search_text.GetValue())
         else:
 
             self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
-        if(self.check_hight_quality.GetValue()):
-            self.MyYouTubeSearcherObj.data_info = self.MyYouTubeSearcherObj.FilterHdResults(self.MyYouTubeSearcherObj.data_info)
+        if(self.CheckIfSomeFilterSet()):
+            self.MyYouTubeSearcherObj.data_info = self.MyYouTubeSearcherObj.FilterResults(self.MyYouTubeSearcherObj.data_info)
             self.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.UnloadRelatedThumbs()
             self.text.SetLabel("No Results!")
             self.statusbar.SetStatusText('Nothing Found...',1)
-            self.open_in_browser_btn.Disable()
+            self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
             self.search_by_thumbnail_btn.Disable()
             self.playbtn.Disable()
             return None
@@ -884,7 +924,6 @@ class MyFrame(wx.Frame):
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
-        self.history_btn.Enable()
 
     def StopTimer(self):
         self.now_timer_is_running = 0
@@ -942,8 +981,6 @@ class MyFrame(wx.Frame):
         return if_last
     def RefreshSongInfo(self):
         global GlobalVideoIdForRelated
-        if(not self.check_playlist_search):
-            self.MyYouTubeSearcherObj.current_list_title = ""
         self.UnloadRelatedThumbs()
         self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
         if self.HistoryStuffObj.CheckIfInHistoryMode():
@@ -981,7 +1018,7 @@ class MyFrame(wx.Frame):
             self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("no.png",150))
             self.panel.Refresh()
             self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
-        self.open_in_browser_btn.Enable()
+        self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,True)
         self.search_by_thumbnail_btn.Enable()
     def RunTimer(self):
         global GlobalLastRenameFileResult
@@ -1028,13 +1065,13 @@ class MyFrame(wx.Frame):
         self.playbtn.Disable()
         self.check_mp4_or_mp3.Disable()
         self.check_hight_quality.Disable()
-        self.delete_downloads_btn.Disable()
+        self.toolbar.EnableTool(self.APP_DELETE_DOWNLOADS,False)
         self.MyYouTubeSearcherObj.DownloadFile()
         self.check_auto_play.Enable()
         self.playbtn.Enable()
         self.check_mp4_or_mp3.Enable()
         self.check_hight_quality.Enable()
-        self.delete_downloads_btn.Enable()
+        self.toolbar.EnableTool(self.APP_DELETE_DOWNLOADS,True)
         GlobalIfNowDownloading = 0
     def OnOpenInBrowser(self,event):
         url = self.MyYouTubeSearcherObj.GetWatchUrl()
@@ -1042,7 +1079,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.AppendToHistoryFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.30")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.40")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
