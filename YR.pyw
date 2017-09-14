@@ -109,8 +109,11 @@ class RelateFromHistoryRecommender():
             result_dict = self.parent.FilterResults(result_dict)
         videoIds = self.parent.GetRelatedIds(result_dict)
         shuffle(videoIds)
-        return videoIds[0]
-        self.parent.parent.statusbar.SetStatusText("",1)
+        if(len(videoIds) == 0):
+            self.parent.parent.statusbar.SetStatusText("Nothing found! Try again!",1)
+            return ""
+        else:
+            return videoIds[0]
 class ClarifayTagger():
     def __init__(self,parent):
         self.parent = parent
@@ -188,6 +191,9 @@ class MyYouTubeSearcher():
     def RefreshNumberOfFoundVideos(self):
         self.number_of_found_videos = len(self.data_info["items"])
     def FilterResults(self,arg_dict):
+        only_HD = self.parent.check_show_only_HD.GetValue()
+        min_min = self.parent.min_min_edit.GetValue()
+        max_min = self.parent.max_min_edit.GetValue()
         the_dict = arg_dict
         indexes_for_delete = list()
         i = 0
@@ -218,13 +224,13 @@ class MyYouTubeSearcher():
             content = urllib2.urlopen(url).read()
             contents = json.loads(content)
             if(len(contents["items"])>0):
-                if(self.parent.check_show_only_HD.GetValue()):
+                if(only_HD):
                     if(contents["items"][0]["contentDetails"]["definition"]!="hd"):
                         indexes_for_delete.append(i)
-                if(self.parent.min_min_edit.GetValue() and self.parent.max_min_edit.GetValue()):
+                if(min_min and max_min):
                     duration = isodate.parse_duration(contents["items"][0]["contentDetails"]["duration"])
                     duration_in_minutes = duration.total_seconds()/60
-                    if(duration_in_minutes <= int(self.parent.min_min_edit.GetValue()) or duration_in_minutes >= int(self.parent.max_min_edit.GetValue())):
+                    if(duration_in_minutes <= int(min_min) or duration_in_minutes >= int(max_min)):
                         if i not in indexes_for_delete:
                             indexes_for_delete.append(i)
             else:
@@ -247,7 +253,7 @@ class MyYouTubeSearcher():
         query = query.replace(' ', '+')
         self.data_info = dict()
         self.found_ids = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=20&type=video&fields=items(id(videoId))&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=30&type=video&fields=items(id(videoId))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
@@ -475,6 +481,13 @@ class HistoryStuff():
         self.history_list = list()
         self.in_history_mode = 0
         self.index = 0
+        self.if_all_prepearings_done = 0
+    def AllPrepearingsDone(self):
+        return self.if_all_prepearings_done
+    def SetAllPrepearingsDone(self):
+        self. if_all_prepearings_done = 1
+    def UnsetAllPrepearingsDone(self):
+        self. if_all_prepearings_done = 0
     def RemoveDuplicates(self):
         reversed_list = self.history_list
         reversed_list.reverse()
@@ -502,12 +515,17 @@ class HistoryStuff():
         self.in_history_mode = val
         if(val == 0):
             self.history_list = list()
+            self.UnsetAllPrepearingsDone()
         else:
             self.RemoveDuplicates()
+            self.index = self.GetSizeOfHistory()-1
             if(self.parent.CheckIfSomeFilterSet()):
+                self.parent.RefreshSongInfo()
+                self.parent.RefreshPrevAndNextButtons()
                 self.history_list = self.parent.MyYouTubeSearcherObj.FilterResults(self.history_list)
             self.parent.current_main_title = "Your History"
         self.index = self.GetSizeOfHistory()-1
+        self.parent.RefreshSongInfo()
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
@@ -760,13 +778,18 @@ class MyFrame(wx.Frame):
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
+    def RunProgressBar(self):
+        dlg = MyProgressDialog(self)
+        t1 = threading.Thread(target=dlg.ShowModal)
+        t1.daemon = True
+        t1.start()
     def CheckIfSomeFilterSet(self):
         if(self.check_show_only_HD.GetValue() or self.min_min_edit.GetValue() or self.max_min_edit.GetValue()):
             return 1
         else:
             return 0
     def OnClickMainThumbnail(self,evt):
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "":
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone():
             dlg = wx.MessageDialog(None, 'Item will be deleted from history.', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
             result = dlg.ShowModal()
             if result == wx.ID_NO:
@@ -775,7 +798,7 @@ class MyFrame(wx.Frame):
             self.RefreshSongInfo()
     def OnHoverMainThumbnail(self,evt):
         global GlobalVideoIdForRelated
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "":
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone():
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
             self.MyImageToolsObj.MergeTwoImagesToMerged("file.png","trash.png")
             self.main_image_thumb.SetBitmap(wx.Bitmap("merged.png",wx.BITMAP_TYPE_ANY))
@@ -790,7 +813,8 @@ class MyFrame(wx.Frame):
     def OnRecommendButtonPressed(self,evt):
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = self.MyYouTubeSearcherObj.RelateFromHistoryRecommenderObj.GetRecommendedVideoId()
-        self.RefreshSongInfo()
+        if(GlobalVideoIdForRelated!=""):
+            self.RefreshSongInfo()
         self.playbtn.Enable()
     def OnChangeCheckboxRandomSearch(self,evt):
         if self.random_search_menu_checkbox.IsChecked():
@@ -807,16 +831,22 @@ class MyFrame(wx.Frame):
         self.search_text.Enable()
     def OnChangeIndex(self,evt):
         self.ChangeIndex(self.index_info_edit.GetValue())
-    def OnStartHistoryMode(self,evt):
+    def OnStartHistoryModeThread(self):
+        self.HistoryStuffObj.UnsetAllPrepearingsDone()
+        self.smartbtn.Disable()
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = ""
         global GlobalIfNowDownloading
-        self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
-        self.HistoryStuffObj.EnableDisableHistoryMode(1)
-        self.RefreshSongInfo()
-        self.RefreshPrevAndNextButtons()
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+        self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
+        self.HistoryStuffObj.EnableDisableHistoryMode(1)
+        self.RefreshPrevAndNextButtons()
+        self.smartbtn.Enable()
+        self.HistoryStuffObj.SetAllPrepearingsDone()
+    def OnStartHistoryMode(self,evt):
+        t = threading.Thread(target = self.OnStartHistoryModeThread)
+        t.start()
     def OnOpenDownloads(self,evt):
         os.startfile(os.getcwd()+"./downloads")
     def UnloadRelatedThumbs(self):
