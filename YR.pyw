@@ -17,6 +17,7 @@ import unicodedata
 import warnings
 import Image
 import wx.lib.scrolledpanel
+import win32clipboard
 
 warnings.filterwarnings('ignore')
 
@@ -594,6 +595,9 @@ class MyFrame(wx.Frame):
         self.info_shown = 0
         self.size_without_info = (645,620)
         self.size_with_info = (930,620)
+        self.url_link_is_in_clipboard = 0
+        self.copy_checker_btn_thread_is_running = 0
+        self.copy_checker_btn_thread_stopped = 1
 
         wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=self.size_without_info,style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER ^ wx.MAXIMIZE_BOX)
 
@@ -676,7 +680,7 @@ class MyFrame(wx.Frame):
         self.search_box_btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.full_info_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.full_info_sizer_subsizer_1 = wx.BoxSizer(wx.VERTICAL)
+        self.full_info_sizer_subsizer_1 = wx.BoxSizer(wx.HORIZONTAL)
         self.full_info_sizer_subsizer_2 = wx.BoxSizer(wx.HORIZONTAL)
 
         # and a few controls
@@ -712,7 +716,7 @@ class MyFrame(wx.Frame):
         self.likes_gauge = wx.Gauge(self.panel, range=100, size=(200, 30))
         self.like_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("like.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
         self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("dislike.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
-
+        self.copy_link_btn = wx.Button(self.panel, -1, "Copy link")
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -756,6 +760,7 @@ class MyFrame(wx.Frame):
         self.main_image_thumb.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEFT_DOWN, self.OnClickMainThumbnail)
         self.channel_btn.Bind(wx.EVT_BUTTON, self.OnOpenChannel)
+        self.copy_link_btn.Bind(wx.EVT_BUTTON, self.OnCopyLink)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -766,7 +771,8 @@ class MyFrame(wx.Frame):
         # Adding things to sizers
         self.full_info_sizer.Add(self.title_description_static_text, 0, wx.ALL, 10)
         self.full_info_sizer.Add(self.description_static_text, 0, wx.LEFT , 19)
-        self.full_info_sizer_subsizer_1.Add(self.channel_btn, 0, wx.LEFT, 20)
+        self.full_info_sizer_subsizer_1.Add(self.channel_btn, 0, wx.LEFT, 52)
+        self.full_info_sizer_subsizer_1.Add(self.copy_link_btn, 0, wx.LEFT, 18)
         self.full_info_sizer.Add(self.full_info_sizer_subsizer_1, 0, wx.ALL, 10)
         self.full_info_sizer_subsizer_2.Add(self.like_static_image, 0, wx.LEFT, 32)
         self.full_info_sizer_subsizer_2.Add(self.likes_gauge, 0, wx.LEFT, 0)
@@ -837,6 +843,49 @@ class MyFrame(wx.Frame):
             self.ln = wx.StaticLine(self.panel, -1,pos=(280+i,37), style=wx.LI_VERTICAL)
             self.ln.SetSize((5,2))
         i = 0
+    def GetRealVideoIdAuto(self):
+        global GlobalVideoIdForRelated
+        if(GlobalVideoIdForRelated==""):
+            return self.MyYouTubeSearcherObj.GetCurrentVideoId()
+        else:
+            return GlobalVideoIdForRelated
+    def OnCopyLink(self,evt):
+        videoId = self.GetRealVideoIdAuto()
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText("https://www.youtube.com/watch?v="+videoId)
+        win32clipboard.CloseClipboard()
+        return
+    def CopyButtonThread(self):
+        videoId = self.GetRealVideoIdAuto()
+        self.SetOffCopyCheckThread()
+        while(not self.copy_checker_btn_thread_stopped):
+            time.sleep(0.1)
+        self.SetOnCopyCheckThread()
+        self.copy_checker_btn_thread_stopped = 0
+        while(self.CheckCopyThreadIsRunning()):
+            time.sleep(1)
+            try:
+                win32clipboard.OpenClipboard()
+                data = win32clipboard.GetClipboardData()
+                win32clipboard.CloseClipboard()
+                if(data == "https://www.youtube.com/watch?v="+videoId):
+                    self.url_link_is_in_clipboard = 1
+                    self.copy_link_btn.Disable()
+                    self.copy_link_btn.SetLabel("In Clipboard")
+                else:
+                    self.url_link_is_in_clipboard = 0
+                    self.copy_link_btn.Enable()
+                    self.copy_link_btn.SetLabel("Copy Link")
+            except:
+                a=0
+        self.copy_checker_btn_thread_stopped = 1
+    def SetOnCopyCheckThread(self):
+        self.copy_checker_btn_thread_is_running = 1
+    def SetOffCopyCheckThread(self):
+        self.copy_checker_btn_thread_is_running = 0
+    def CheckCopyThreadIsRunning(self):
+        return self.copy_checker_btn_thread_is_running
     def OnEraseBackground(self, evt):
         return
     def RefreshAdditionalInformation(self):
@@ -851,8 +900,11 @@ class MyFrame(wx.Frame):
                 else:
                     self.likes_gauge.SetValue(0)
             self.channel_btn.Enable()
+            copy_button_thread = threading.Thread(target=self.CopyButtonThread)
+            copy_button_thread.start()
         else:
             self.channel_btn.Disable()
+            self.copy_link_btn.Disable()
     def OnOpenChannel(self,evt):
         global GlobalVideoIdForRelated
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
