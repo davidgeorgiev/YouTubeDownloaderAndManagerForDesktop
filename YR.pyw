@@ -17,6 +17,7 @@ import unicodedata
 import warnings
 import Image
 import wx.lib.scrolledpanel
+
 warnings.filterwarnings('ignore')
 
 GlobalSmartThreadRuning = 0
@@ -25,6 +26,16 @@ GlobalIfNowDownloading = 0
 GlobalLastRenameFileResult = 0
 api_key = #ENTER YOUR API KEY HERE
 
+def intWithCommas(x):
+    if type(x) not in [type(0), type(0L)]:
+        raise TypeError("Parameter must be an integer.")
+    if x < 0:
+        return '-' + intWithCommas(-x)
+    result = ''
+    while x >= 1000:
+        x, r = divmod(x, 1000)
+        result = ",%03d%s" % (r, result)
+    return "%d%s" % (x, result)
 class ImageTools():
     def __init__ (self,parent):
         self.parent = parent
@@ -666,6 +677,7 @@ class MyFrame(wx.Frame):
         self.filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.full_info_sizer = wx.BoxSizer(wx.VERTICAL)
         self.full_info_sizer_subsizer_1 = wx.BoxSizer(wx.VERTICAL)
+        self.full_info_sizer_subsizer_2 = wx.BoxSizer(wx.HORIZONTAL)
 
         # and a few controls
         self.check_show_only_HD = wx.CheckBox(self.panel, label = 'Only HD',pos = (10,10))
@@ -697,6 +709,10 @@ class MyFrame(wx.Frame):
         self.title_description_static_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
         self.description_static_text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE,size=(287, 342),pos=(5,5))
         self.channel_btn = wx.Button(self.panel, -1, "Open channel")
+        self.likes_gauge = wx.Gauge(self.panel, range=100, size=(200, 30))
+        self.like_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("like.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
+        self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("dislike.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
+
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -725,6 +741,7 @@ class MyFrame(wx.Frame):
         self.sBitMaps[5].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(5))
         self.sBitMaps[5].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
 
+
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
         self.Bind(wx.EVT_BUTTON, self.OnSmartButton, self.smartbtn)
@@ -751,7 +768,11 @@ class MyFrame(wx.Frame):
         self.full_info_sizer.Add(self.description_static_text, 0, wx.LEFT , 19)
         self.full_info_sizer_subsizer_1.Add(self.channel_btn, 0, wx.LEFT, 20)
         self.full_info_sizer.Add(self.full_info_sizer_subsizer_1, 0, wx.ALL, 10)
+        self.full_info_sizer_subsizer_2.Add(self.like_static_image, 0, wx.LEFT, 32)
+        self.full_info_sizer_subsizer_2.Add(self.likes_gauge, 0, wx.LEFT, 0)
+        self.full_info_sizer_subsizer_2.Add(self.dislike_static_image, 0, wx.LEFT, 0)
         self.filter_sizer.Add(self.check_show_only_HD,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
+        self.full_info_sizer.Add(self.full_info_sizer_subsizer_2, 0, wx.TOP, 0)
         self.filter_sizer.Add(self.filter_label_from, 0, wx.ALL, 10)
         self.filter_sizer.Add(self.min_min_edit, 0, wx.ALL, 10)
         self.filter_sizer.Add(self.filter_label_to, 0, wx.ALL, 10)
@@ -823,6 +844,12 @@ class MyFrame(wx.Frame):
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
             if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
                 self.description_static_text.SetValue(self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["description"])
+                likes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
+                dislikes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
+                if(((likes+dislikes)/100)!=0):
+                    self.likes_gauge.SetValue(likes/((likes+dislikes)/100))
+                else:
+                    self.likes_gauge.SetValue(0)
             self.channel_btn.Enable()
         else:
             self.channel_btn.Disable()
@@ -832,22 +859,27 @@ class MyFrame(wx.Frame):
             if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
                 webbrowser.open_new("https://www.youtube.com/channel/"+self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["channelId"])
     def OnShowAndHideInfoTool(self,evt):
+        animation_speed = 30
         #self.panel.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
         if(self.info_shown):
             i = self.size_with_info
             k = 0
             while(i[0]-k > self.size_without_info[0]):
-                k+=30
+                k+=animation_speed
                 self.SetSize((i[0]-k,i[1]))
                 self.Center()
             self.info_shown = 0
+            if(animation_speed>30):
+                self.SetSize(self.size_without_info)
         else:
             i = self.size_without_info
             k = 0
             while(i[0]+k <= self.size_with_info[0]):
-                k+=30
+                k+=animation_speed
                 self.SetSize((i[0]+k,i[1]))
                 self.Center()
+            if(animation_speed>30):
+                self.SetSize(self.size_with_info)
             self.info_shown = 1
             self.RefreshAdditionalInformation()
         #self.panel.SetBackgroundStyle(wx.BG_STYLE_ERASE)
@@ -902,6 +934,7 @@ class MyFrame(wx.Frame):
         self.ChangeIndex(self.index_info_edit.GetValue())
     def OnStartHistoryModeThread(self):
         self.HistoryStuffObj.UnsetAllPrepearingsDone()
+        self.toolbar.EnableTool(self.APP_HISTORY,False)
         self.smartbtn.Disable()
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = ""
@@ -912,6 +945,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
         self.RefreshPrevAndNextButtons()
         self.smartbtn.Enable()
+        self.toolbar.EnableTool(self.APP_HISTORY,True)
         self.HistoryStuffObj.SetAllPrepearingsDone()
     def OnStartHistoryMode(self,evt):
         t = threading.Thread(target = self.OnStartHistoryModeThread)
@@ -1105,7 +1139,17 @@ class MyFrame(wx.Frame):
             return
         self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitleFromId(""))
         self.text.Wrap(300)
-        self.duration_info.SetLabel(self.MyYouTubeSearcherObj.GetPublishedAt()+" "+"["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]")
+        views_count = intWithCommas(int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["viewCount"]))
+        spaces_between = 34
+        spaces_between = (spaces_between-len(views_count))/2
+        label_future_text = "Views: "+views_count
+        for i in range(spaces_between):
+            label_future_text += " "
+        label_future_text += self.MyYouTubeSearcherObj.GetPublishedAt()
+        for i in range(spaces_between):
+            label_future_text += " "
+        label_future_text += "["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]"
+        self.duration_info.SetLabel(label_future_text)
         self.index_info_edit.Enable()
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
@@ -1180,7 +1224,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.AppendToHistoryFile(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.50")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.60")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
