@@ -524,8 +524,9 @@ class HistoryStuff():
                 self.parent.RefreshPrevAndNextButtons()
                 self.history_list = self.parent.MyYouTubeSearcherObj.FilterResults(self.history_list)
             self.parent.current_main_title = "Your History"
+            self.parent.RefreshSongInfo()
         self.index = self.GetSizeOfHistory()-1
-        self.parent.RefreshSongInfo()
+
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
