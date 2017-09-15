@@ -18,6 +18,7 @@ import warnings
 import Image
 import wx.lib.scrolledpanel
 import win32clipboard
+from win32api import GetSystemMetrics
 
 warnings.filterwarnings('ignore')
 
@@ -170,6 +171,11 @@ class MyYouTubeSearcher():
         self.temp_future_filename = ""
         self.MyClarifaiTaggerObj = ClarifayTagger(self)
         self.RelateFromHistoryRecommenderObj = RelateFromHistoryRecommender(self)
+        self.pages_tokens = ["",""]
+    def CreateHtmlWithIFrameForCurrentVideo(self):
+        html_file = open("index.html","w")
+        html_file.write('<iframe width="'+str(GetSystemMetrics(0)/2)+'" height="'+str(GetSystemMetrics(1)/2)+'" src="https://www.youtube.com/embed/'+self.GetCurrentVideoId()+'?rel=0&autoplay=1" frameborder="0" allowfullscreen></iframe>')
+        html_file.close()
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
@@ -259,20 +265,31 @@ class MyYouTubeSearcher():
                 del videoIds[index_for_delete]
             return videoIds
         self.parent.statusbar.SetStatusText("",1)
-    def SearchPlease(self,query):
+    def SearchPlease(self,query,pageToken):
+        if(pageToken!=""):
+            pageToken = "pageToken="+pageToken+"&"
         self.parent.current_main_title = "Search videos: "+query
         self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
         query = query.encode(encoding='UTF-8',errors='strict')
         query = query.replace(' ', '+')
         self.data_info = dict()
         self.found_ids = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=id&q="+query+"&maxResults=30&type=video&fields=items(id(videoId))&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?"+pageToken+"part=id&q="+query+"&maxResults=30&type=video&fields=prevPageToken,nextPageToken,items(id(videoId))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
+        self.pages_tokens = ["",""]
+        if "nextPageToken" in self.data_info:
+            self.pages_tokens[1] = self.data_info["nextPageToken"]
+            del self.data_info["nextPageToken"]
+        if "prevPageToken" in self.data_info:
+            self.pages_tokens[0] = self.data_info["prevPageToken"]
+            del self.data_info["prevPageToken"]
         self.RefreshNumberOfFoundVideos()
         self.parent.statusbar.SetStatusText("",1)
-    def SearchListPlease(self,query):
+    def SearchListPlease(self,query,pageToken):
+        if(pageToken!=""):
+            pageToken = "pageToken="+pageToken+"&"
         self.parent.statusbar.SetStatusText('Searching for "'+query+'"')
         query = query.encode(encoding='UTF-8',errors='strict')
         query = query.replace(' ', '+')
@@ -285,10 +302,17 @@ class MyYouTubeSearcher():
         found_lists_info = json.loads(content)
         playlistId = found_lists_info["items"][0]["id"]["playlistId"]
         self.parent.current_main_title = "List: "+found_lists_info["items"][0]["snippet"]["title"]
-        my_url = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId="+playlistId+"&fields=items(snippet(resourceId(videoId)))&key="+api_key
+        my_url = "https://www.googleapis.com/youtube/v3/playlistItems?"+pageToken+"part=snippet&maxResults=30&playlistId="+playlistId+"&fields=prevPageToken,nextPageToken,items(snippet(resourceId(videoId)))&key="+api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
+        self.pages_tokens = ["",""]
+        if "nextPageToken" in self.data_info:
+            self.pages_tokens[1] = self.data_info["nextPageToken"]
+            del self.data_info["nextPageToken"]
+        if "prevPageToken" in self.data_info:
+            self.pages_tokens[0] = self.data_info["prevPageToken"]
+            del self.data_info["prevPageToken"]
         self.number_of_found_videos = len(self.data_info[u"items"])
         self.parent.statusbar.SetStatusText("",1)
     def LoadStatisticsAndInformation(self):
@@ -531,6 +555,8 @@ class HistoryStuff():
             self.UnsetAllPrepearingsDone()
             self.index = self.GetSizeOfHistory()-1
         else:
+            self.parent.prev_page_btn.Disable()
+            self.parent.next_page_btn.Disable()
             self.RemoveDuplicates()
             self.index = self.GetSizeOfHistory()-1
             if(self.parent.CheckIfSomeFilterSet()):
@@ -611,6 +637,10 @@ class MyFrame(wx.Frame):
         self.APP_OPEN_IN_BROWSER = 4
         self.APP_DELETE_DOWNLOADS = 5
         self.APP_SHOW_AND_HIDE_INFO = 6
+        self.APP_PLAY_EMBED = 7
+        self.APP_CLARIFAI_SEARCH = 8
+        self.APP_OPEN_DOWNLOADS = 9
+        self.APP_ADD_TO_HISTORY = 10
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -652,6 +682,14 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.OnStartHistoryMode, history_tool)
         show_and_hide_info_tool = self.toolbar.AddLabelTool(self.APP_SHOW_AND_HIDE_INFO, 'Show And Hide Info Tool', wx.Bitmap('info.png'))
         self.Bind(wx.EVT_TOOL, self.OnShowAndHideInfoTool, show_and_hide_info_tool)
+        play_embed_tool = self.toolbar.AddLabelTool(self.APP_PLAY_EMBED, 'Play in IFrame', wx.Bitmap('play_embed.png'))
+        self.Bind(wx.EVT_TOOL, self.OnPlayEmbed, play_embed_tool)
+        clarifai_search_tool = self.toolbar.AddLabelTool(self.APP_CLARIFAI_SEARCH, 'Clarifai search', wx.Bitmap('clarifai_search.png'))
+        self.Bind(wx.EVT_TOOL, self.OnSearchByThumbnailButton, clarifai_search_tool)
+        open_downloads_tool = self.toolbar.AddLabelTool(self.APP_OPEN_DOWNLOADS, 'Open downloads', wx.Bitmap('downloads_icon.png'))
+        self.Bind(wx.EVT_TOOL, self.OnOpenDownloads, open_downloads_tool)
+        add_to_history_tool = self.toolbar.AddLabelTool(self.APP_ADD_TO_HISTORY, 'Add to history', wx.Bitmap('add_to_history.png'))
+        self.Bind(wx.EVT_TOOL, self.AddCurrentVideoToHistory, add_to_history_tool)
 
 
 
@@ -702,13 +740,13 @@ class MyFrame(wx.Frame):
         self.search_text = wx.TextCtrl(self.panel,size=(200, -1), style =  wx.TE_PROCESS_ENTER)
         self.smartbtn = wx.Button(self.panel, -1, "Search", size=(60, 25))
         self.playbtn = wx.Button(self.panel, -1, "Download selected video",size=(270, 25))
-        self.prevbtn = wx.Button(self.panel, -1, "Prev")
-        self.nextbtn = wx.Button(self.panel, -1, "Next")
+        self.prevbtn = wx.Button(self.panel, -1, "Prev video")
+        self.nextbtn = wx.Button(self.panel, -1, "Next video")
+        self.prev_page_btn = wx.Button(self.panel, -1, "Prev page")
+        self.next_page_btn = wx.Button(self.panel, -1, "Next page")
         self.index_info_edit = wx.TextCtrl(self.panel,size=(30, -1),style =  wx.TE_PROCESS_ENTER)
         self.index_info = wx.StaticText(self.panel, -1, "")
-        self.search_by_thumbnail_btn = wx.Button(self.panel, -1, "Search by thumbnail")
         self.main_image_thumb = wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(320, 240))
-        self.go_to_downloads_btn = wx.Button(self.panel, -1, "Go to downloads")
         self.check_continuous_play = wx.CheckBox(self.panel, label = 'continuous',pos = (10,10))
         self.title_description_static_text = wx.StaticText(self.panel, -1, "  Description", size=(200, 20))
         self.title_description_static_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
@@ -748,14 +786,14 @@ class MyFrame(wx.Frame):
 
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
-        self.Bind(wx.EVT_BUTTON, self.OnSmartButton, self.smartbtn)
-        self.Bind(wx.EVT_BUTTON, self.OnOpenDownloads, self.go_to_downloads_btn)
+        self.Bind(wx.EVT_BUTTON, lambda event: self.OnSmartButton(""), self.smartbtn)
         self.Bind(wx.EVT_BUTTON, self.OnDownloadFile, self.playbtn)
         self.Bind(wx.EVT_BUTTON, self.PrevSong, self.prevbtn)
         self.Bind(wx.EVT_BUTTON, self.NextSong, self.nextbtn)
+        self.Bind(wx.EVT_BUTTON, self.PrevPage, self.prev_page_btn)
+        self.Bind(wx.EVT_BUTTON, self.NextPage, self.next_page_btn)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnChangeIndex, self.index_info_edit)
-        self.Bind(wx.EVT_TEXT_ENTER, self.OnSmartButton, self.search_text)
-        self.Bind(wx.EVT_BUTTON, self.OnSearchByThumbnailButton, self.search_by_thumbnail_btn)
+        self.Bind(wx.EVT_TEXT_ENTER, lambda event: self.OnSmartButton(""), self.search_text)
         self.main_image_thumb.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitMainThumbnail)
         self.main_image_thumb.Bind(wx.EVT_LEFT_DOWN, self.OnClickMainThumbnail)
@@ -791,6 +829,8 @@ class MyFrame(wx.Frame):
         self.sizer3.Add(self.nextbtn, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info_edit, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info, 0, wx.ALL, 10)
+        self.sizer4.Add(self.prev_page_btn, 0, wx.LEFT, 10)
+        self.sizer4.Add(self.next_page_btn, 0, wx.LEFT, 135)
         self.left_sizer.Add(self.sizer1, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer.Add(self.filter_sizer, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.search_box_btn_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
@@ -810,9 +850,7 @@ class MyFrame(wx.Frame):
         self.right_sizer.Add(self.duration_info, 0, wx.ALL, 10)
         self.right_sizer.Add(self.main_image_thumb, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.right_sizer.Add(self.sizer3)
-        self.sizer5.Add(self.search_by_thumbnail_btn, 0, wx.ALL, 10)
-        self.sizer5.Add(self.go_to_downloads_btn, 0, wx.ALL, 10)
-        self.right_sizer.Add(self.sizer4)
+        self.right_sizer.Add(self.sizer4, 0, wx.TOP, 28)
         self.right_sizer.Add(self.sizer5)
         self.main_sizer.Add(self.left_sizer)
         self.main_sizer.Add(self.right_sizer)
@@ -823,14 +861,34 @@ class MyFrame(wx.Frame):
         # some start GUI configurations
 
         self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
-        self.search_by_thumbnail_btn.Disable()
+        self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
         self.prevbtn.Disable()
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
 
         self.DrawInterfaceLines()
+    def RefreshPrevAndNextPageButtons(self):
+        if(self.MyYouTubeSearcherObj.pages_tokens[0]==""):
+            self.prev_page_btn.Disable()
+        else:
+            self.prev_page_btn.Enable()
+        if(self.MyYouTubeSearcherObj.pages_tokens[1]==""):
+            self.next_page_btn.Disable()
+        else:
+            self.next_page_btn.Enable()
+    def PrevPage(self,evt):
+        self.OnSmartButton(self.MyYouTubeSearcherObj.pages_tokens[0])
+        self.RefreshPrevAndNextPageButtons()
+        return
+    def NextPage(self,evt):
+        self.OnSmartButton(self.MyYouTubeSearcherObj.pages_tokens[1])
+        self.RefreshPrevAndNextPageButtons()
+        return
+    def OnPlayEmbed(self,evt):
+        webbrowser.open("index.html")
     def OnHoverGauge(self,evt):
         global GlobalVideoIdForRelated
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
@@ -986,6 +1044,7 @@ class MyFrame(wx.Frame):
         if(GlobalVideoIdForRelated!=""):
             self.RefreshSongInfo()
         self.playbtn.Enable()
+        self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
     def OnChangeCheckboxRandomSearch(self,evt):
         if self.random_search_menu_checkbox.IsChecked():
             self.user_input_backup = self.search_text.GetValue()
@@ -1010,6 +1069,7 @@ class MyFrame(wx.Frame):
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
         self.RefreshPrevAndNextButtons()
@@ -1102,7 +1162,7 @@ class MyFrame(wx.Frame):
     def OnTimeToClose(self, evt):
         self.Destroy()
 
-    def OnSmartButton(self, evt):
+    def OnSmartButton(self, pageToken):
         global GlobalVideoIdForRelated
         GlobalVideoIdForRelated = ""
         self.HistoryStuffObj.EnableDisableHistoryMode(0)
@@ -1113,10 +1173,11 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshPrevAndNextButtons()
         if(self.search_for_list_menu_checkbox.IsChecked()):
-            self.MyYouTubeSearcherObj.SearchListPlease(self.search_text.GetValue())
+            self.MyYouTubeSearcherObj.SearchListPlease(self.search_text.GetValue(),pageToken)
         else:
 
-            self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue())
+            self.MyYouTubeSearcherObj.SearchPlease(self.search_text.GetValue(),pageToken)
+        self.RefreshPrevAndNextPageButtons()
         if(self.CheckIfSomeFilterSet()):
             self.MyYouTubeSearcherObj.data_info = self.MyYouTubeSearcherObj.FilterResults(self.MyYouTubeSearcherObj.data_info)
             self.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
@@ -1125,13 +1186,15 @@ class MyFrame(wx.Frame):
             self.text.SetLabel("No Results!")
             self.statusbar.SetStatusText('Nothing Found...',1)
             self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
-            self.search_by_thumbnail_btn.Disable()
+            self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
             self.playbtn.Disable()
+            self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
             return None
         self.RefreshSongInfo()
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
 
     def StopTimer(self):
         self.now_timer_is_running = 0
@@ -1205,6 +1268,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.LoadStatisticsAndInformation()
         self.MyYouTubeSearcherObj.LoadContentDetails()
         img_downloaded = self.MyImageToolsObj.ResizeImage("file.jpg",(320,240))
+        self.MyYouTubeSearcherObj.CreateHtmlWithIFrameForCurrentVideo()
         if(GlobalVideoIdForRelated != ""):
             self.main_title_static_text.SetLabel("Related Video")
         else:
@@ -1230,14 +1294,14 @@ class MyFrame(wx.Frame):
         self.index_info.SetLabel("/"+str(number_of_elements))
         if(img_downloaded):
             #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("file.png",150))
-            self.panel.Refresh()
+            #self.panel.Refresh()
             self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
         else:
             #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("no.png",150))
-            self.panel.Refresh()
+            #self.panel.Refresh()
             self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,True)
-        self.search_by_thumbnail_btn.Enable()
+        self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,True)
         if(self.info_shown):
             self.RefreshAdditionalInformation()
     def RunTimer(self):
@@ -1283,20 +1347,28 @@ class MyFrame(wx.Frame):
         GlobalIfNowDownloading = 1
         self.check_auto_play.Disable()
         self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.check_mp4_or_mp3.Disable()
         self.check_hight_quality.Disable()
         self.toolbar.EnableTool(self.APP_DELETE_DOWNLOADS,False)
         self.MyYouTubeSearcherObj.DownloadFile()
         self.check_auto_play.Enable()
         self.playbtn.Enable()
+        self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.check_mp4_or_mp3.Enable()
         self.check_hight_quality.Enable()
         self.toolbar.EnableTool(self.APP_DELETE_DOWNLOADS,True)
         GlobalIfNowDownloading = 0
-    def OnOpenInBrowser(self,event):
+    def AddCurrentVideoToHistory(self,event):
         url = self.MyYouTubeSearcherObj.GetWatchUrl()
-        webbrowser.open_new(url)
         self.HistoryStuffObj.AppendToHistoryFile(url)
+        self.ShowMessageSavedToHistory()
+    def ShowMessageSavedToHistory(self):
+        dlg = wx.MessageDialog(self.panel,"Video has been saved to your history!", "Video added", wx.OK | wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
+    def OnOpenInBrowser(self,event):
+        webbrowser.open_new(url)
 class MyApp(wx.App):
     def OnInit(self):
         frame = MyFrame(None, "YouTube Music - David Georiev - v2.60")
