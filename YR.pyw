@@ -589,6 +589,7 @@ class MyFrame(wx.Frame):
         self.now_timer_is_running = 0
         self.user_input_backup = ""
         self.related_thumbnail_updater_thread_is_running = 0
+        self.related_thumbnail_updater_thread_is_stopped = 1
         self.related_thumbnail_id_updater_thread = 0
         self.related_thumbnails_current_indexes = [0]*6
         self.current_main_title = ""
@@ -745,7 +746,6 @@ class MyFrame(wx.Frame):
         self.sBitMaps[5].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(5))
         self.sBitMaps[5].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
 
-
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
         self.Bind(wx.EVT_BUTTON, self.OnSmartButton, self.smartbtn)
@@ -761,6 +761,8 @@ class MyFrame(wx.Frame):
         self.main_image_thumb.Bind(wx.EVT_LEFT_DOWN, self.OnClickMainThumbnail)
         self.channel_btn.Bind(wx.EVT_BUTTON, self.OnOpenChannel)
         self.copy_link_btn.Bind(wx.EVT_BUTTON, self.OnCopyLink)
+        self.likes_gauge.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverGauge)
+        self.likes_gauge.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitLikeDislike)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -828,7 +830,22 @@ class MyFrame(wx.Frame):
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
 
-
+        self.DrawInterfaceLines()
+    def OnHoverGauge(self,evt):
+        global GlobalVideoIdForRelated
+        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
+            info_for_showing = ""
+            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
+                    likes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
+                    likes = intWithCommas(likes)
+                    info_for_showing+="likes: "+likes+" "
+                    dislikes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
+                    dislikes = intWithCommas(dislikes)
+                    info_for_showing+="dislikes: "+dislikes+" "
+            self.statusbar.SetStatusText(info_for_showing)
+    def OnExitLikeDislike(self,evt):
+        self.statusbar.SetStatusText("")
+    def DrawInterfaceLines(self):
         self.ln = wx.StaticLine(self.panel, -1,pos=(0,0), style=wx.LI_VERTICAL)
         self.ln.SetSize((1000,3))
         self.ln = wx.StaticLine(self.panel, -1,pos=(290,0), style=wx.LI_HORIZONTAL)
@@ -1023,10 +1040,15 @@ class MyFrame(wx.Frame):
         t1.daemon = True
         t1.start()
     def ThumbnailLoopUpdater(self):
+        self.related_thumbnail_updater_thread_is_running = 0
+        while(not self.related_thumbnail_updater_thread_is_stopped):
+            time.sleep(0.1)
+        self.related_thumbnail_updater_thread_is_running = 1
+        self.related_thumbnail_updater_thread_is_stopped = 0
         bitmapId = self.related_thumbnail_id_updater_thread
         ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         k = self.related_thumbnails_current_indexes[bitmapId]
-        while(self.related_thumbnail_updater_thread_is_running):
+        while(1):
             k+=1
             if k > 2:
                 k=0
@@ -1034,15 +1056,16 @@ class MyFrame(wx.Frame):
             self.related_thumbnails_current_indexes[bitmapId] = k
             if os.path.isfile(img_address_local):
                 self.sBitMaps[bitmapId].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
-            for sleeping in range(1000):
-                if(self.related_thumbnail_updater_thread_is_running==0):
+            for i in range(100):
+                time.sleep(0.01)
+                if(not self.related_thumbnail_updater_thread_is_running):
+                    self.related_thumbnail_updater_thread_is_stopped = 1
                     return
-                time.sleep(0.001)
+
     def OnHoverThumbnail(self, id):
         ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         if(len(ids)>id):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(ids[id]))
-            self.related_thumbnail_updater_thread_is_running = 1
             self.related_thumbnail_id_updater_thread = id
             self.RunRelatedThumbnailsLoopUpdaterThread()
     def OnExitThumbnail(self,evt):
