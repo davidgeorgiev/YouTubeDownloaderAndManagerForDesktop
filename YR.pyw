@@ -864,6 +864,7 @@ class MyFrame(wx.Frame):
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
         self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
+        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
         self.prevbtn.Disable()
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
@@ -1044,6 +1045,7 @@ class MyFrame(wx.Frame):
         if(GlobalVideoIdForRelated!=""):
             self.RefreshSongInfo()
         self.playbtn.Enable()
+        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
     def OnChangeCheckboxRandomSearch(self,evt):
         if self.random_search_menu_checkbox.IsChecked():
@@ -1069,6 +1071,7 @@ class MyFrame(wx.Frame):
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
         self.HistoryStuffObj.EnableDisableHistoryMode(1)
@@ -1188,12 +1191,14 @@ class MyFrame(wx.Frame):
             self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
             self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
             self.playbtn.Disable()
+            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
             return None
         self.RefreshSongInfo()
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
 
     def StopTimer(self):
@@ -1347,6 +1352,7 @@ class MyFrame(wx.Frame):
         GlobalIfNowDownloading = 1
         self.check_auto_play.Disable()
         self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.check_mp4_or_mp3.Disable()
         self.check_hight_quality.Disable()
@@ -1354,6 +1360,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.DownloadFile()
         self.check_auto_play.Enable()
         self.playbtn.Enable()
+        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.check_mp4_or_mp3.Enable()
         self.check_hight_quality.Enable()
@@ -1371,7 +1378,7 @@ class MyFrame(wx.Frame):
         webbrowser.open_new(url)
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.60")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.70")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
