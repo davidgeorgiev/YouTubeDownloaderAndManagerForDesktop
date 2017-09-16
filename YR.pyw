@@ -70,6 +70,8 @@ FILENAME_DISLIKE_ICON = "GUI_Images\\dislike.png"
 FILENAME_SMALL_NO_THUMBNAIL = "GUI_Images\\no_small.png"
 FILENAME_TRASH_OVERLAY_IMAGE = "GUI_Images\\trash.png"
 FILENAME_SWITCH_ACCOUNT_ICON = "GUI_Images\\log_out_account.png"
+FILENAME_ADD_TO_FAVORITES_ICON = "GUI_Images\\add_to_favorites.png"
+FILENAME_ADD_TO_FAVORITES_EMPTY_ICON = "GUI_Images\\add_to_favorites_empty.png"
 
 DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
 DIRNAME_DOWNLOADS_FOLDER = "downloads"
@@ -80,6 +82,7 @@ class MyOAuthManager():
         self.parent = parent
         self.ReAuthenticate()
         self.history_playlist_id_filename = FILENAME_HISTORY_PLAYLIST
+        self.user_playlists = self.get_user_playlists()
     def ReAuthenticate(self):
         self.youtube = self.get_authenticated_service()
     def get_authenticated_service(self):
@@ -118,11 +121,27 @@ class MyOAuthManager():
         return content[0]
     def add_video_to_playlist(self,videoID,playlistID):
         try:
-            add_video_request= self.youtube.playlistItems().insert(part="snippet",body={'snippet': {'playlistId': playlistID,'resourceId': {'kind': 'youtube#video','videoId': videoID}}}).execute()
+            add_video_request= self.youtube.playlistItems().insert(part="snippet",body={'snippet': {'playlistId': playlistID,'resourceId': {'kind': 'youtube#video','videoId': videoID}}, 'position': '0'}).execute()
+            return 1
         except:
             self.parent.statusbar.SetStatusText("can't add video to playlist!")
+            return 0
     def LikeAVideo(self,videoId,like_or_dislike):
         self.youtube.videos().rate(id=videoId,rating=like_or_dislike).execute()
+    def add_subscription(self, channel_id):
+        add_subscription_response = self.youtube.subscriptions().insert(part='snippet',body=dict(snippet=dict(resourceId=dict(channelId=channel_id)))).execute()
+
+        return add_subscription_response["snippet"]["title"]
+    def get_user_playlists(self):
+        playlists = list()
+        get_lists_response = self.youtube.channels().list(part='contentDetails',mine='true').execute()
+        for playlist in get_lists_response["items"][0]["contentDetails"]["relatedPlaylists"]:
+            playlists.append([playlist,get_lists_response["items"][0]["contentDetails"]["relatedPlaylists"][playlist]])
+        return playlists
+    def get_favorites_playlist_id(self):
+        for playlist in self.user_playlists:
+            if(playlist[0] == "favorites"):
+                return playlist[1]
 def intWithCommas(x):
     if type(x) not in [type(0), type(0L)]:
         raise TypeError("Parameter must be an integer.")
@@ -786,9 +805,6 @@ class MyFrame(wx.Frame):
         # add an item to the menu, using \tKeyName automatically
         # creates an accelerator, the third param is some help text
         # that will show up in the statusbar
-        quit_menu_item = wx.MenuItem(self.fileMenu, self.APP_EXIT, '&Quit')
-        quit_menu_item.SetBitmap(wx.Bitmap(FILENAME_EXIT_ICON))
-        self.fileMenu.AppendItem(quit_menu_item)
         switch_youtube_account_item = wx.MenuItem(self.fileMenu, self.APP_LOG_OUT_ACCOUNT, '&Log out')
         switch_youtube_account_item.SetBitmap(wx.Bitmap(FILENAME_SWITCH_ACCOUNT_ICON))
         self.fileMenu.AppendItem(switch_youtube_account_item)
@@ -799,7 +815,6 @@ class MyFrame(wx.Frame):
         self.searchMenu.Check(self.search_for_list_menu_checkbox.GetId(), False)
 
         # bind the menu event to an event handler
-        self.Bind(wx.EVT_MENU, self.OnTimeToClose, id=self.APP_EXIT)
         self.Bind(wx.EVT_MENU, self.OnLogOutAccount, id=self.APP_LOG_OUT_ACCOUNT)
         self.Bind(wx.EVT_MENU, self.OnStartHistoryMode, id=self.APP_HISTORY)
         self.Bind(wx.EVT_MENU, self.OnRecommendButtonPressed, id=self.APP_RECOMMEND)
@@ -867,6 +882,8 @@ class MyFrame(wx.Frame):
         self.full_info_sizer = wx.BoxSizer(wx.VERTICAL)
         self.full_info_sizer_subsizer_1 = wx.BoxSizer(wx.HORIZONTAL)
         self.full_info_sizer_subsizer_2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.full_info_sizer_subsizer_3 = wx.BoxSizer(wx.HORIZONTAL)
+        self.add_to_favorites_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # and a few controls
         self.check_show_only_HD = wx.CheckBox(self.panel, label = 'Only HD',pos = (10,10))
@@ -902,6 +919,8 @@ class MyFrame(wx.Frame):
         self.like_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_LIKE_ICON, wx.BITMAP_TYPE_ANY), size=(30, 27))
         self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_DISLIKE_ICON, wx.BITMAP_TYPE_ANY), size=(30, 27))
         self.copy_link_btn = wx.Button(self.panel, -1, "Copy link")
+        self.subscribe_btn = wx.Button(self.panel, -1, "Subscribe")
+        self.add_to_favorites_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_ADD_TO_FAVORITES_EMPTY_ICON, wx.BITMAP_TYPE_ANY), size=(50, 50))
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
@@ -949,6 +968,15 @@ class MyFrame(wx.Frame):
         self.likes_gauge.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitLikeDislike)
         self.like_static_image.Bind(wx.EVT_LEFT_DOWN, self.LikeCurrentVideo)
         self.dislike_static_image.Bind(wx.EVT_LEFT_DOWN, self.DislikeCurrentVideo)
+        self.like_static_image.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverLikeCurrentVideoStaticImage)
+        self.dislike_static_image.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverDislikeCurrentVideoStaticImage)
+        self.like_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitLikeCurrentVideoStaticImage)
+        self.dislike_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitDislikeCurrentVideoStaticImage)
+        self.subscribe_btn.Bind(wx.EVT_LEFT_DOWN, self.SubscribeCurrentChannel)
+        self.add_to_favorites_static_image.Bind(wx.EVT_LEFT_DOWN, self.OnClickHeart)
+        self.add_to_favorites_static_image.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverHeart)
+        self.add_to_favorites_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitHeart)
+
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -965,8 +993,10 @@ class MyFrame(wx.Frame):
         self.full_info_sizer_subsizer_2.Add(self.like_static_image, 0, wx.LEFT, 32)
         self.full_info_sizer_subsizer_2.Add(self.likes_gauge, 0, wx.LEFT, 0)
         self.full_info_sizer_subsizer_2.Add(self.dislike_static_image, 0, wx.LEFT, 0)
+        self.full_info_sizer_subsizer_3.Add(self.subscribe_btn, 0, wx.LEFT, 62)
         self.filter_sizer.Add(self.check_show_only_HD,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.full_info_sizer.Add(self.full_info_sizer_subsizer_2, 0, wx.TOP, 0)
+        self.full_info_sizer.Add(self.full_info_sizer_subsizer_3, 0, wx.TOP, 10)
         self.filter_sizer.Add(self.filter_label_from, 0, wx.ALL, 10)
         self.filter_sizer.Add(self.min_min_edit, 0, wx.ALL, 10)
         self.filter_sizer.Add(self.filter_label_to, 0, wx.ALL, 10)
@@ -978,7 +1008,9 @@ class MyFrame(wx.Frame):
         self.sizer3.Add(self.index_info_edit, 0, wx.ALL, 10)
         self.sizer3.Add(self.index_info, 0, wx.ALL, 10)
         self.sizer4.Add(self.prev_page_btn, 0, wx.LEFT, 10)
-        self.sizer4.Add(self.next_page_btn, 0, wx.LEFT, 135)
+        self.add_to_favorites_sizer.Add(self.add_to_favorites_static_image, 0, wx.TOP, -30)
+        self.sizer4.Add(self.add_to_favorites_sizer, 0, wx.LEFT, 42)
+        self.sizer4.Add(self.next_page_btn, 0, wx.LEFT, 42)
         self.left_sizer.Add(self.sizer1, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.left_sizer.Add(self.filter_sizer, flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.search_box_btn_sizer.Add(self.search_text,flag=wx.ALIGN_CENTER)
@@ -1017,8 +1049,54 @@ class MyFrame(wx.Frame):
         self.nextbtn.Disable()
         self.check_hight_quality.SetValue(1)
         self.index_info_edit.Disable()
-
+        self.prev_page_btn.Disable()
+        self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnHoverLikeCurrentVideoStaticImage(self,evt):
+        if(self.VideoInformationExists()):
+            self.like_static_image.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        return
+    def OnHoverDislikeCurrentVideoStaticImage(self,evt):
+        if(self.VideoInformationExists()):
+            self.dislike_static_image.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        return
+    def OnExitLikeCurrentVideoStaticImage(self,evt):
+        self.like_static_image.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        return
+    def OnExitDislikeCurrentVideoStaticImage(self,evt):
+        self.dislike_static_image.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        return
+    def VideoInformationExists(self):
+        global GlobalVideoIdForRelated
+        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
+            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
+                return 1
+        return 0
+    def OnHoverHeart(self,evt):
+        if(self.VideoInformationExists()):
+            self.add_to_favorites_static_image.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            self.add_to_favorites_static_image.SetBitmap(wx.Bitmap(FILENAME_ADD_TO_FAVORITES_ICON,wx.BITMAP_TYPE_ANY))
+        return
+    def OnExitHeart(self,evt):
+        self.add_to_favorites_static_image.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        self.add_to_favorites_static_image.SetBitmap(wx.Bitmap(FILENAME_ADD_TO_FAVORITES_EMPTY_ICON,wx.BITMAP_TYPE_ANY))
+        return
+    def OnClickHeart(self,evt):
+        if(self.VideoInformationExists()):
+            added = self.MyOAuthManagerObj.add_video_to_playlist(self.MyYouTubeSearcherObj.GetCurrentVideoId(),self.MyOAuthManagerObj.get_favorites_playlist_id())
+            if(added):
+                self.ShowMessageAddedToFavorites()
+        return
+    def ShowMessageAddedToFavorites(self):
+        dlg = wx.MessageDialog(self.panel,'Video added to your "favorites playlist".', "Added to Favorites", wx.OK | wx.ICON_WARNING)
+        dlg.ShowModal()
+        dlg.Destroy()
+    def SubscribeCurrentChannel(self,evt):
+        if(self.VideoInformationExists()):
+                channel_name = self.MyOAuthManagerObj.add_subscription(self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["channelId"])
+                self.statusbar.SetStatusText("Subscribed to "+channel_name)
+                return
+        self.statusbar.SetStatusText("Couldn't make a subscription.")
     def OnLogOutAccount(self,evt):
         try:
             os.unlink(FILENAME_AUTHENTICATE_INFO_JSON)
@@ -1053,16 +1131,14 @@ class MyFrame(wx.Frame):
     def OnPlayEmbed(self,evt):
         webbrowser.open(FILENAME_IFRAME_HTML)
     def OnHoverGauge(self,evt):
-        global GlobalVideoIdForRelated
-        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
-            info_for_showing = ""
-            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
-                    likes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
-                    likes = intWithCommas(likes)
-                    info_for_showing+="likes: "+likes+" "
-                    dislikes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
-                    dislikes = intWithCommas(dislikes)
-                    info_for_showing+="dislikes: "+dislikes+" "
+        info_for_showing = ""
+        if(self.VideoInformationExists()):
+            likes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
+            likes = intWithCommas(likes)
+            info_for_showing+="likes: "+likes+" "
+            dislikes = int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
+            dislikes = intWithCommas(dislikes)
+            info_for_showing+="dislikes: "+dislikes+" "
             self.statusbar.SetStatusText(info_for_showing)
     def OnExitLikeDislike(self,evt):
         self.statusbar.SetStatusText("")
@@ -1127,27 +1203,25 @@ class MyFrame(wx.Frame):
     def OnEraseBackground(self, evt):
         return
     def RefreshAdditionalInformation(self):
-        global GlobalVideoIdForRelated
-        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
-            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
-                self.description_static_text.SetValue(self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["description"])
-                likes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
-                dislikes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
-                if(((likes+dislikes)/100)!=0):
-                    self.likes_gauge.SetValue(likes/((likes+dislikes)/100))
-                else:
-                    self.likes_gauge.SetValue(0)
+        if(self.VideoInformationExists()):
+            self.description_static_text.SetValue(self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["description"])
+            likes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["likeCount"])
+            dislikes = float(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["dislikeCount"])
+            if(((likes+dislikes)/100)!=0):
+                self.likes_gauge.SetValue(likes/((likes+dislikes)/100))
+            else:
+                self.likes_gauge.SetValue(0)
+            self.subscribe_btn.Enable()
             self.channel_btn.Enable()
             copy_button_thread = threading.Thread(target=self.CopyButtonThread)
             copy_button_thread.start()
         else:
+            self.subscribe_btn.Disable()
             self.channel_btn.Disable()
             self.copy_link_btn.Disable()
     def OnOpenChannel(self,evt):
-        global GlobalVideoIdForRelated
-        if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
-            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
-                webbrowser.open_new("https://www.youtube.com/channel/"+self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["channelId"])
+        if(self.VideoInformationExists()):
+            webbrowser.open_new("https://www.youtube.com/channel/"+self.MyYouTubeSearcherObj.full_data_info["items"][0]["snippet"]["channelId"])
     def OnShowAndHideInfoTool(self,evt):
         animation_speed = 30
         #self.panel.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
@@ -1199,7 +1273,7 @@ class MyFrame(wx.Frame):
             self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_MERGED_IMAGE,wx.BITMAP_TYPE_ANY))
         else:
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-        if ((self.MyYouTubeSearcherObj.number_of_found_videos != 0) and (GlobalVideoIdForRelated!="") and (self.HistoryStuffObj.GetSizeOfHistory() != 0)):
+        if(self.VideoInformationExists()):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(""))
     def OnExitMainThumbnail(self,evt):
         if self.HistoryStuffObj.CheckIfInHistoryMode() and (self.HistoryStuffObj.GetSizeOfHistory() != 0):
@@ -1349,7 +1423,7 @@ class MyFrame(wx.Frame):
         self.HistoryStuffObj.EnableDisableHistoryMode(0)
         self.text.SetLabel("Searching...")
         self.duration_info.SetLabel("unavailable")
-        if(self.random_search_menu_checkbox.IsChecked()) and evt!="related_is_called":
+        if(self.random_search_menu_checkbox.IsChecked()):
             self.MyYouTubeSearcherObj.GetRandomWord()
         self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshPrevAndNextButtons()
@@ -1561,7 +1635,7 @@ class MyFrame(wx.Frame):
         webbrowser.open_new(self.MyYouTubeSearcherObj.GetWatchUrl())
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v3.10")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v3.20")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
