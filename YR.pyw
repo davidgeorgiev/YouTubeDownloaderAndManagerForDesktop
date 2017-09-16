@@ -1132,35 +1132,42 @@ class MyFrame(wx.Frame):
         else:
             return 0
     def OnClickMainThumbnail(self,evt):
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone():
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone() and self.HistoryStuffObj.GetSizeOfHistory()!=0:
             dlg = wx.MessageDialog(None, 'Item will be deleted from history.', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
             result = dlg.ShowModal()
             if result == wx.ID_NO:
                 return
             self.HistoryStuffObj.DeleteCurrentItem()
+            if(self.HistoryStuffObj.GetSizeOfHistory() == 0):
+                self.NothingFoundRefresh()
+                self.main_title_static_text.SetLabel("Nothing in History")
+                return
             self.RefreshSongInfo()
     def OnHoverMainThumbnail(self,evt):
         global GlobalVideoIdForRelated
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone():
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone() and self.HistoryStuffObj.GetSizeOfHistory()!=0:
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
             self.MyImageToolsObj.MergeTwoImagesToMerged("file.png","trash.png")
             self.main_image_thumb.SetBitmap(wx.Bitmap("merged.png",wx.BITMAP_TYPE_ANY))
         else:
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-        if not ((self.MyYouTubeSearcherObj.number_of_found_videos == 0) and (GlobalVideoIdForRelated=="") and (self.HistoryStuffObj.GetSizeOfHistory() == 0)):
+        if ((self.MyYouTubeSearcherObj.number_of_found_videos != 0) and (GlobalVideoIdForRelated!="") and (self.HistoryStuffObj.GetSizeOfHistory() != 0)):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(""))
     def OnExitMainThumbnail(self,evt):
-        if self.HistoryStuffObj.CheckIfInHistoryMode():
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and (self.HistoryStuffObj.GetSizeOfHistory() != 0):
             self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
         self.statusbar.SetStatusText("")
     def OnRecommendButtonPressed(self,evt):
-        global GlobalVideoIdForRelated
-        GlobalVideoIdForRelated = self.MyYouTubeSearcherObj.RelateFromHistoryRecommenderObj.GetRecommendedVideoId()
-        if(GlobalVideoIdForRelated!=""):
-            self.RefreshSongInfo()
-        self.playbtn.Enable()
-        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
-        self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
+        if os.stat("all_played_videos.txt").st_size != 0:
+            global GlobalVideoIdForRelated
+            GlobalVideoIdForRelated = self.MyYouTubeSearcherObj.RelateFromHistoryRecommenderObj.GetRecommendedVideoId()
+            if(GlobalVideoIdForRelated!=""):
+                self.RefreshSongInfo()
+            self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
+            self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
+        else:
+            self.ShowMessageNoHistory()
     def OnChangeCheckboxRandomSearch(self,evt):
         if self.random_search_menu_checkbox.IsChecked():
             self.user_input_backup = self.search_text.GetValue()
@@ -1196,6 +1203,12 @@ class MyFrame(wx.Frame):
             self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,True)
             self.toolbar.EnableTool(self.APP_HISTORY,True)
             self.HistoryStuffObj.SetAllPrepearingsDone()
+        else:
+            self.ShowMessageNoHistory()
+    def ShowMessageNoHistory(self):
+        dlg = wx.MessageDialog(self.panel,"There is not history yet. Download something or \nadd a video to history with the [+] button", "No history found!!", wx.OK | wx.ICON_WARNING)
+        dlg.ShowModal()
+        dlg.Destroy()
     def OnStartHistoryMode(self,evt):
         t = threading.Thread(target = self.OnStartHistoryModeThread)
         t.start()
@@ -1302,14 +1315,7 @@ class MyFrame(wx.Frame):
             self.MyYouTubeSearcherObj.data_info = self.MyYouTubeSearcherObj.FilterResults(self.MyYouTubeSearcherObj.data_info)
             self.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
-            self.UnloadRelatedThumbs()
-            self.text.SetLabel("No Results!")
-            self.statusbar.SetStatusText('Nothing Found...',1)
-            self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
-            self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
-            self.playbtn.Disable()
-            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
-            self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
+            self.NothingFoundRefresh()
             return None
         self.RefreshSongInfo()
         global GlobalIfNowDownloading
@@ -1317,7 +1323,17 @@ class MyFrame(wx.Frame):
             self.playbtn.Enable()
             self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
-
+    def NothingFoundRefresh(self):
+        self.UnloadRelatedThumbs()
+        self.text.SetLabel("No Results!")
+        self.statusbar.SetStatusText('Nothing Found...',1)
+        self.duration_info.SetLabel("unavailable")
+        self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
+        self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
+        self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
+        self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
+        self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
     def StopTimer(self):
         self.now_timer_is_running = 0
     def OnDownloadFile(self, evt):
@@ -1499,7 +1515,7 @@ class MyFrame(wx.Frame):
         webbrowser.open_new(self.MyYouTubeSearcherObj.GetWatchUrl())
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v3.00")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v3.10")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
