@@ -19,6 +19,8 @@ import Image
 import wx.lib.scrolledpanel
 import win32clipboard
 from win32api import GetSystemMetrics
+from time import gmtime, strftime
+
 import httplib2
 import sys
 from apiclient.discovery import build
@@ -63,8 +65,8 @@ class MyOAuthManager():
               part="snippet,status",
               body=dict(
                 snippet=dict(
-                  title="Youtube manager and download history playlist",
-                  description="A private playlist created with the YouTube API v3"
+                  title="History playlist - "+strftime("%Y-%m-%d %H:%M:%S", gmtime()),
+                  description="Youtube manager and downloader playlist"
                 ),
                 status=dict(
                   privacyStatus="private"
@@ -462,7 +464,7 @@ class MyYouTubeSearcher():
         try:
             testfile.retrieve(thumb_url, "file.jpg")
         except IOError:
-            a=1
+            pass
         self.parent.statusbar.SetStatusText("",1)
     def ClearRelatedThubms(self):
         os.system('del /Q "'+os.getcwd()+'\\related_images\\*"')
@@ -478,7 +480,7 @@ class MyYouTubeSearcher():
                 try:
                     r = testfile.retrieve(thumb_url, local_address)
                 except IOError:
-                    a=1
+                    pass
 
         self.parent.statusbar.SetStatusText("",1)
     def DownloadingStatusLoopUpdater(self):
@@ -642,6 +644,10 @@ class HistoryStuff():
         self.parent.toolbar.EnableTool(self.parent.APP_CLARIFAI_SEARCH,False)
         self.parent.toolbar.EnableTool(self.parent.APP_HISTORY,False)
         self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST,False)
+        try:
+            os.unlink(self.parent.MyOAuthManagerObj.history_playlist_id_filename)
+        except:
+            pass
         self.parent.MyOAuthManagerObj.CreateHistoryPlaylistIfNotCreated()
         self.syncing_now = 1
         sync_thread = threading.Thread(target=self.AddAllHistoryToHistoryPlaylist)
@@ -1062,7 +1068,7 @@ class MyFrame(wx.Frame):
                     self.copy_link_btn.Enable()
                     self.copy_link_btn.SetLabel("Copy Link")
             except:
-                a=0
+                pass
         self.copy_checker_btn_thread_stopped = 1
     def SetOnCopyCheckThread(self):
         self.copy_checker_btn_thread_is_running = 1
@@ -1493,7 +1499,7 @@ class MyFrame(wx.Frame):
         webbrowser.open_new(self.MyYouTubeSearcherObj.GetWatchUrl())
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.90")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v3.00")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
