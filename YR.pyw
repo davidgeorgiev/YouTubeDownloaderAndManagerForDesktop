@@ -1533,7 +1533,6 @@ class MyFrame(wx.Frame):
         GlobalIfNowDownloading = 1
         self.check_auto_play.Disable()
         self.playbtn.Disable()
-        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.check_mp4_or_mp3.Disable()
         self.check_hight_quality.Disable()
@@ -1541,7 +1540,6 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.DownloadFile()
         self.check_auto_play.Enable()
         self.playbtn.Enable()
-        self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.check_mp4_or_mp3.Enable()
         self.check_hight_quality.Enable()
