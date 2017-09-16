@@ -42,17 +42,52 @@ GlobalIfNowDownloading = 0
 GlobalLastRenameFileResult = 0
 api_key = #ENTER YOUR API KEY HERE
 
+FILENAME_HISTORY_PLAYLIST = "history_playlist_id_file.playlistId"
+FILENAME_HISTORY = "all_played_videos.txt"
+FILENAME_AUTHENTICATE_INFO_JSON = "oauth2.json"
+
+FILENAME_IFRAME_HTML = "index.html"
+FILENAME_NO_SOUND_MP3 = "no sound\\no.mp3"
+FILENAME_NO_SOUND_MP4 = "no sound\\no.mp4"
+
+FILENAME_MERGED_IMAGE = "GUI_Images\\merged.png"
+FILENAME_MAIN_THUMBNAIL_IMAGE = "GUI_Images\\file.png"
+FILENAME_MAIN_THUMBNAIL_BEFORE_CONVERTION = "GUI_Images\\file.jpg"
+FILENAME_EXIT_ICON = "GUI_Images\\exit.png"
+FILENAME_DELETE_DOWNLOADS_ICON = "GUI_Images\\delete_downloads.png"
+FILENAME_OPEN_IN_BROWSER_ICON = "GUI_Images\\open_in_browser.png"
+FILENAME_RECOMMEND_ICON = "GUI_Images\\recommend.png"
+FILENAME_HISTORY_ICON = "GUI_Images\\history.png"
+FILENAME_INFO_ICON = "GUI_Images\\info.png"
+FILENAME_PLAY_EMBED_ICON = "GUI_Images\\play_embed.png"
+FILENAME_CLARIFAI_SEARCH_ICON = "GUI_Images\\clarifai_search.png"
+FILENAME_DOWNLOADS_ICON = "GUI_Images\\downloads.png"
+FILENAME_ADD_TO_HISTORY_ICON = "GUI_Images\\add_to_history.png"
+FILENAME_SYNC_HISTORY_ICON = "GUI_Images\\sync_history.png"
+FILENAME_BIG_NO_THUMBNAIL = "GUI_Images\\no.png"
+FILENAME_LIKE_ICON = "GUI_Images\\like.png"
+FILENAME_DISLIKE_ICON = "GUI_Images\\dislike.png"
+FILENAME_SMALL_NO_THUMBNAIL = "GUI_Images\\no_small.png"
+FILENAME_TRASH_OVERLAY_IMAGE = "GUI_Images\\trash.png"
+FILENAME_SWITCH_ACCOUNT_ICON = "GUI_Images\\log_out_account.png"
+
+DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
+DIRNAME_DOWNLOADS_FOLDER = "downloads"
+
+
 class MyOAuthManager():
     def __init__(self,parent):
         self.parent = parent
+        self.ReAuthenticate()
+        self.history_playlist_id_filename = FILENAME_HISTORY_PLAYLIST
+    def ReAuthenticate(self):
         self.youtube = self.get_authenticated_service()
-        self.history_playlist_id_filename = "history_playlist_id_file.playlistId"
     def get_authenticated_service(self):
         argparser.add_argument("--videoid", default="L-oNKK1CrnU", help="ID of video to like.")
         args = argparser.parse_args()
         flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,scope=YOUTUBE_READ_WRITE_SCOPE,message=MISSING_CLIENT_SECRETS_MESSAGE)
 
-        storage = Storage("%s-oauth2.json" % sys.argv[0])
+        storage = Storage(FILENAME_AUTHENTICATE_INFO_JSON)
         credentials = storage.get()
 
         if credentials is None or credentials.invalid:
@@ -123,10 +158,10 @@ class ImageTools():
         background = Image.open(bg)
         foreground = Image.open(fg)
         background.paste(foreground, (0, 0), foreground)
-        background.save("merged.png", "PNG")
+        background.save(FILENAME_MERGED_IMAGE, "PNG")
 
     def GetAvgColorOfAnImage(self,img_url,sum_val):
-        im = Image.open("file.png")
+        im = Image.open(FILENAME_MAIN_THUMBNAIL_IMAGE)
         i = 0
         red_counter = 0
         red_sum = 0
@@ -171,7 +206,7 @@ class RelateFromHistoryRecommender():
         self.parent = parent
     def AnalyzeHistoryFileAndGetRandomVideo(self):
         content = list()
-        with open("./all_played_videos.txt") as f:
+        with open(FILENAME_HISTORY) as f:
             content = f.readlines()
         shuffle(content)
         self.base_random_video_id = content[0].replace("https://www.youtube.com/watch?v=","").replace("\n","")
@@ -233,7 +268,7 @@ class MyYouTubeSearcher():
         self.RelateFromHistoryRecommenderObj = RelateFromHistoryRecommender(self)
         self.pages_tokens = ["",""]
     def CreateHtmlWithIFrameForCurrentVideo(self):
-        html_file = open("index.html","w")
+        html_file = open(FILENAME_IFRAME_HTML,"w")
         html_file.write('<iframe width="'+str(GetSystemMetrics(0)/2)+'" height="'+str(GetSystemMetrics(1)/2)+'" src="https://www.youtube.com/embed/'+self.GetCurrentVideoId()+'?rel=0&autoplay=1" frameborder="0" allowfullscreen></iframe>')
         html_file.close()
     def GetIndex(self):
@@ -462,19 +497,19 @@ class MyYouTubeSearcher():
         thumb_url = self.GetThumbUrlById(self.GetCurrentVideoId())
         testfile = urllib.URLopener()
         try:
-            testfile.retrieve(thumb_url, "file.jpg")
+            testfile.retrieve(thumb_url, FILENAME_MAIN_THUMBNAIL_BEFORE_CONVERTION)
         except IOError:
             pass
         self.parent.statusbar.SetStatusText("",1)
     def ClearRelatedThubms(self):
-        os.system('del /Q "'+os.getcwd()+'\\related_images\\*"')
+        os.system('del /Q "'+os.getcwd()+'\\'+DIRNAME_RELATED_IMAGES_FOLDER+'\\*"')
     def SaveRelatedThumbs(self):
         self.ClearRelatedThubms()
         self.parent.statusbar.SetStatusText('Fetching related thumbs...',1)
         related_ids = self.GetRelatedIds(None)
         for related_id in related_ids:
             for i in range(3):
-                local_address = "./related_images/"+related_id+"-"+str(i)+".jpg"
+                local_address = "./"+DIRNAME_RELATED_IMAGES_FOLDER+"/"+related_id+"-"+str(i)+".jpg"
                 thumb_url = "https://img.youtube.com/vi/"+related_id+"/"+str(i+1)+".jpg"
                 testfile = urllib.URLopener()
                 try:
@@ -507,8 +542,8 @@ class MyYouTubeSearcher():
             else:
                 hight_quality_parameters = '-f "best[height<500]"'
             format_parameters = "--merge-output-format mp4"
-        os.system('del '+'"downloads\\'+self.temp_future_filename+'"')
-        command = 'youtubedl\\youtubedl.exe "'+self.GetWatchUrl()+'" '+hight_quality_parameters+' '+format_parameters+' -o "./downloads/temp.'+'%'+'(ext)s"'
+        os.system('del '+'"'+DIRNAME_DOWNLOADS_FOLDER+'\\'+self.temp_future_filename+'"')
+        command = 'youtubedl\\youtubedl.exe "'+self.GetWatchUrl()+'" '+hight_quality_parameters+' '+format_parameters+' -o "./'+DIRNAME_DOWNLOADS_FOLDER+'/temp.'+'%'+'(ext)s"'
         self.parent.HistoryStuffObj.AppendToHistoryFile(self.GetWatchUrl())
         os.system(command)
         self.RenameMp3File()
@@ -520,7 +555,7 @@ class MyYouTubeSearcher():
                 self.t_timer = threading.Thread(target=self.parent.RunTimer)
                 self.t_timer.daemon = True
                 self.t_timer.start()
-                os.startfile('downloads\\'+self.temp_future_filename, 'open')
+                os.startfile(DIRNAME_DOWNLOADS_FOLDER+'\\'+self.temp_future_filename, 'open')
             else:
                 self.parent.CheckAndContinueIfIsEnabledContinuousMode("start_from_beginning_after_end")
     def PlayMp3InDir(self,event):
@@ -529,16 +564,16 @@ class MyYouTubeSearcher():
         self.parent.statusbar.SetStatusText("",1)
     def CleanDirectoryFromDumpFiles(self):
         self.parent.statusbar.SetStatusText('Cleaning download dir dump files...',1)
-        test=os.listdir(os.getcwd()+"\\downloads")
+        test=os.listdir(os.getcwd()+"\\"+DIRNAME_DOWNLOADS_FOLDER)
         for item in test:
             if item.endswith(".webm") or item.endswith(".part") or item.endswith("temp.mp3") or item.endswith("temp.mp4"):
-                os.remove(os.getcwd()+"\\downloads\\"+item)
+                os.remove(os.getcwd()+"\\"+DIRNAME_DOWNLOADS_FOLDER+"\\"+item)
         self.parent.statusbar.SetStatusText("",1)
     def DeleteAllMp3(self):
         self.parent.statusbar.SetStatusText('Deleting all downloads...',1)
         self.StopMusic()
         time.sleep(2)
-        os.system('del /Q "'+os.getcwd()+'\\downloads\\*"')
+        os.system('del /Q "'+os.getcwd()+'\\'+DIRNAME_DOWNLOADS_FOLDER+'\\*"')
         self.parent.statusbar.SetStatusText("",1)
     def ShowMessageCantBeDownload(self):
         dlg = wx.MessageDialog(self.parent.panel,"The format you want is unavailable! \nPlease change the quality or format and try again.", "Download warning!", wx.OK | wx.ICON_WARNING)
@@ -548,7 +583,7 @@ class MyYouTubeSearcher():
         global GlobalLastRenameFileResult
         self.StopMusic()
         time.sleep(2)
-        file_to_check_and_rename = os.path.join(os.getcwd(), "downloads\\temp."+self.ext)
+        file_to_check_and_rename = os.path.join(os.getcwd(), DIRNAME_DOWNLOADS_FOLDER+"\\temp."+self.ext)
         if(os.path.isfile(file_to_check_and_rename)):
             os.system('rename "'+file_to_check_and_rename+'" "'+self.temp_future_filename+'"')
             GlobalLastRenameFileResult = 1
@@ -560,8 +595,8 @@ class MyYouTubeSearcher():
             return 0
     def StopMusic(self):
         if(self.parent.IfAutoPlay()==1):
-            os.startfile("no sound\\no.mp3", 'open')
-            os.startfile("no sound\\no.mp4", 'open')
+            os.startfile(FILENAME_NO_SOUND_MP3, 'open')
+            os.startfile(FILENAME_NO_SOUND_MP4, 'open')
             time.sleep(1)
     def GetRandomWord(self):
         url = "http://setgetgo.com/randomword/get.php"
@@ -597,7 +632,7 @@ class HistoryStuff():
         self.history_list = unique_list
         self.SaveListToFile(self.history_list)
     def SaveListToFile(self, arg_list):
-        myfile = open("all_played_videos.txt", "w")
+        myfile = open(FILENAME_HISTORY, "w")
         for videoId in arg_list:
             myfile.write("https://www.youtube.com/watch?v="+videoId+"\n")
         myfile.close()
@@ -683,12 +718,12 @@ class HistoryStuff():
     def CheckIfInHistoryMode(self):
         return self.in_history_mode
     def AppendToHistoryFile(self,log):
-        with open("all_played_videos.txt", "a") as myfile:
+        with open(FILENAME_HISTORY, "a") as myfile:
             myfile.write(log+'\n')
     def ReadHistoryFromFile(self):
         self.parent.statusbar.SetStatusText("Reading history from file...",1)
         content = list()
-        with open("./all_played_videos.txt") as f:
+        with open(FILENAME_HISTORY) as f:
             content = f.readlines()
         i = 0
         for item in content:
@@ -742,6 +777,7 @@ class MyFrame(wx.Frame):
         self.APP_OPEN_DOWNLOADS = 9
         self.APP_ADD_TO_HISTORY = 10
         self.APP_SYNC_HISTORY_PLAYLIST = 11
+        self.APP_LOG_OUT_ACCOUNT = 12
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -751,8 +787,11 @@ class MyFrame(wx.Frame):
         # creates an accelerator, the third param is some help text
         # that will show up in the statusbar
         quit_menu_item = wx.MenuItem(self.fileMenu, self.APP_EXIT, '&Quit')
-        quit_menu_item.SetBitmap(wx.Bitmap('exit.png'))
+        quit_menu_item.SetBitmap(wx.Bitmap(FILENAME_EXIT_ICON))
         self.fileMenu.AppendItem(quit_menu_item)
+        switch_youtube_account_item = wx.MenuItem(self.fileMenu, self.APP_LOG_OUT_ACCOUNT, '&Log out')
+        switch_youtube_account_item.SetBitmap(wx.Bitmap(FILENAME_SWITCH_ACCOUNT_ICON))
+        self.fileMenu.AppendItem(switch_youtube_account_item)
 
         self.random_search_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Random search', 'Random search', kind=wx.ITEM_CHECK)
         self.search_for_list_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Search for list', 'Search for list', kind=wx.ITEM_CHECK)
@@ -761,6 +800,7 @@ class MyFrame(wx.Frame):
 
         # bind the menu event to an event handler
         self.Bind(wx.EVT_MENU, self.OnTimeToClose, id=self.APP_EXIT)
+        self.Bind(wx.EVT_MENU, self.OnLogOutAccount, id=self.APP_LOG_OUT_ACCOUNT)
         self.Bind(wx.EVT_MENU, self.OnStartHistoryMode, id=self.APP_HISTORY)
         self.Bind(wx.EVT_MENU, self.OnRecommendButtonPressed, id=self.APP_RECOMMEND)
 
@@ -771,27 +811,29 @@ class MyFrame(wx.Frame):
 
         self.SetMenuBar(self.menuBar)
 
+
+
         # TOOLBAR
         self.toolbar = self.CreateToolBar()
-        delete_downloads_tool = self.toolbar.AddLabelTool(self.APP_DELETE_DOWNLOADS, 'Delete Downloads', wx.Bitmap('delete_downloads.png'))
+        delete_downloads_tool = self.toolbar.AddLabelTool(self.APP_DELETE_DOWNLOADS, 'Delete Downloads', wx.Bitmap(FILENAME_DELETE_DOWNLOADS_ICON))
         self.Bind(wx.EVT_TOOL, self.OnDeleteDownloads, delete_downloads_tool)
-        open_in_browser_tool = self.toolbar.AddLabelTool(self.APP_OPEN_IN_BROWSER, 'Open In Browser', wx.Bitmap('open_in_browser.png'))
+        open_in_browser_tool = self.toolbar.AddLabelTool(self.APP_OPEN_IN_BROWSER, 'Open In Browser', wx.Bitmap(FILENAME_OPEN_IN_BROWSER_ICON))
         self.Bind(wx.EVT_TOOL, self.OnOpenInBrowser, open_in_browser_tool)
-        recommend_tool = self.toolbar.AddLabelTool(self.APP_RECOMMEND, "Recommend for you", wx.Bitmap('recommend.png'))
+        recommend_tool = self.toolbar.AddLabelTool(self.APP_RECOMMEND, "Recommend for you", wx.Bitmap(FILENAME_RECOMMEND_ICON))
         self.Bind(wx.EVT_TOOL, self.OnRecommendButtonPressed, recommend_tool)
-        history_tool = self.toolbar.AddLabelTool(self.APP_HISTORY, 'History', wx.Bitmap('history.png'))
+        history_tool = self.toolbar.AddLabelTool(self.APP_HISTORY, 'History', wx.Bitmap(FILENAME_HISTORY_ICON))
         self.Bind(wx.EVT_TOOL, self.OnStartHistoryMode, history_tool)
-        show_and_hide_info_tool = self.toolbar.AddLabelTool(self.APP_SHOW_AND_HIDE_INFO, 'Show And Hide Info Tool', wx.Bitmap('info.png'))
+        show_and_hide_info_tool = self.toolbar.AddLabelTool(self.APP_SHOW_AND_HIDE_INFO, 'Show And Hide Info Tool', wx.Bitmap(FILENAME_INFO_ICON))
         self.Bind(wx.EVT_TOOL, self.OnShowAndHideInfoTool, show_and_hide_info_tool)
-        play_embed_tool = self.toolbar.AddLabelTool(self.APP_PLAY_EMBED, 'Play in IFrame', wx.Bitmap('play_embed.png'))
+        play_embed_tool = self.toolbar.AddLabelTool(self.APP_PLAY_EMBED, 'Play in IFrame', wx.Bitmap(FILENAME_PLAY_EMBED_ICON))
         self.Bind(wx.EVT_TOOL, self.OnPlayEmbed, play_embed_tool)
-        clarifai_search_tool = self.toolbar.AddLabelTool(self.APP_CLARIFAI_SEARCH, 'Clarifai search', wx.Bitmap('clarifai_search.png'))
+        clarifai_search_tool = self.toolbar.AddLabelTool(self.APP_CLARIFAI_SEARCH, 'Clarifai search', wx.Bitmap(FILENAME_CLARIFAI_SEARCH_ICON))
         self.Bind(wx.EVT_TOOL, self.OnSearchByThumbnailButton, clarifai_search_tool)
-        open_downloads_tool = self.toolbar.AddLabelTool(self.APP_OPEN_DOWNLOADS, 'Open downloads', wx.Bitmap('downloads_icon.png'))
+        open_downloads_tool = self.toolbar.AddLabelTool(self.APP_OPEN_DOWNLOADS, 'Open downloads', wx.Bitmap(FILENAME_DOWNLOADS_ICON))
         self.Bind(wx.EVT_TOOL, self.OnOpenDownloads, open_downloads_tool)
-        add_to_history_tool = self.toolbar.AddLabelTool(self.APP_ADD_TO_HISTORY, 'Add to history', wx.Bitmap('add_to_history.png'))
+        add_to_history_tool = self.toolbar.AddLabelTool(self.APP_ADD_TO_HISTORY, 'Add to history', wx.Bitmap(FILENAME_ADD_TO_HISTORY_ICON))
         self.Bind(wx.EVT_TOOL, self.AddCurrentVideoToHistory, add_to_history_tool)
-        sync_history_tool = self.toolbar.AddLabelTool(self.APP_SYNC_HISTORY_PLAYLIST, 'Sync history', wx.Bitmap('sync_history.png'))
+        sync_history_tool = self.toolbar.AddLabelTool(self.APP_SYNC_HISTORY_PLAYLIST, 'Sync history', wx.Bitmap(FILENAME_SYNC_HISTORY_ICON))
         self.Bind(wx.EVT_TOOL, self.HistoryStuffObj.SyncHistoryPlaylist, sync_history_tool)
 
 
@@ -850,40 +892,40 @@ class MyFrame(wx.Frame):
         self.next_page_btn = wx.Button(self.panel, -1, "Next page")
         self.index_info_edit = wx.TextCtrl(self.panel,size=(30, -1),style =  wx.TE_PROCESS_ENTER)
         self.index_info = wx.StaticText(self.panel, -1, "")
-        self.main_image_thumb = wx.StaticBitmap(self.panel, -1, wx.Bitmap("no.png", wx.BITMAP_TYPE_ANY), size=(320, 240))
+        self.main_image_thumb = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_BIG_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(320, 240))
         self.check_continuous_play = wx.CheckBox(self.panel, label = 'continuous',pos = (10,10))
         self.title_description_static_text = wx.StaticText(self.panel, -1, "  Description", size=(200, 20))
         self.title_description_static_text.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL))
         self.description_static_text = wx.TextCtrl(self.panel, style=wx.TE_MULTILINE,size=(287, 342),pos=(5,5))
         self.channel_btn = wx.Button(self.panel, -1, "Open channel")
         self.likes_gauge = wx.Gauge(self.panel, range=100, size=(200, 30))
-        self.like_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("like.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
-        self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap("dislike.png", wx.BITMAP_TYPE_ANY), size=(30, 27))
+        self.like_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_LIKE_ICON, wx.BITMAP_TYPE_ANY), size=(30, 27))
+        self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_DISLIKE_ICON, wx.BITMAP_TYPE_ANY), size=(30, 27))
         self.copy_link_btn = wx.Button(self.panel, -1, "Copy link")
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[0].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(0))
         self.sBitMaps[0].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(0))
         self.sBitMaps[0].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[1].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(1))
         self.sBitMaps[1].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(1))
         self.sBitMaps[1].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[2].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(2))
         self.sBitMaps[2].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(2))
         self.sBitMaps[2].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[3].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(3))
         self.sBitMaps[3].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(3))
         self.sBitMaps[3].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[4].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(4))
         self.sBitMaps[4].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(4))
         self.sBitMaps[4].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap("no_small.png", wx.BITMAP_TYPE_ANY), size=(120, 90)))
+        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
         self.sBitMaps[5].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(5))
         self.sBitMaps[5].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(5))
         self.sBitMaps[5].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
@@ -977,6 +1019,12 @@ class MyFrame(wx.Frame):
         self.index_info_edit.Disable()
 
         self.DrawInterfaceLines()
+    def OnLogOutAccount(self,evt):
+        try:
+            os.unlink(FILENAME_AUTHENTICATE_INFO_JSON)
+            self.Destroy()
+        except:
+            pass
     def LikeCurrentVideo(self,evt):
         self.MyOAuthManagerObj.LikeAVideo(self.MyYouTubeSearcherObj.GetCurrentVideoId(),"like")
         self.statusbar.SetStatusText("You like this video")
@@ -1003,7 +1051,7 @@ class MyFrame(wx.Frame):
         self.RefreshPrevAndNextPageButtons()
         return
     def OnPlayEmbed(self,evt):
-        webbrowser.open("index.html")
+        webbrowser.open(FILENAME_IFRAME_HTML)
     def OnHoverGauge(self,evt):
         global GlobalVideoIdForRelated
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
@@ -1147,18 +1195,18 @@ class MyFrame(wx.Frame):
         global GlobalVideoIdForRelated
         if self.HistoryStuffObj.CheckIfInHistoryMode() and GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone() and self.HistoryStuffObj.GetSizeOfHistory()!=0:
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-            self.MyImageToolsObj.MergeTwoImagesToMerged("file.png","trash.png")
-            self.main_image_thumb.SetBitmap(wx.Bitmap("merged.png",wx.BITMAP_TYPE_ANY))
+            self.MyImageToolsObj.MergeTwoImagesToMerged(FILENAME_MAIN_THUMBNAIL_IMAGE,FILENAME_TRASH_OVERLAY_IMAGE)
+            self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_MERGED_IMAGE,wx.BITMAP_TYPE_ANY))
         else:
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
         if ((self.MyYouTubeSearcherObj.number_of_found_videos != 0) and (GlobalVideoIdForRelated!="") and (self.HistoryStuffObj.GetSizeOfHistory() != 0)):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(""))
     def OnExitMainThumbnail(self,evt):
         if self.HistoryStuffObj.CheckIfInHistoryMode() and (self.HistoryStuffObj.GetSizeOfHistory() != 0):
-            self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
+            self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_MAIN_THUMBNAIL_IMAGE,wx.BITMAP_TYPE_ANY))
         self.statusbar.SetStatusText("")
     def OnRecommendButtonPressed(self,evt):
-        if os.stat("all_played_videos.txt").st_size != 0:
+        if os.stat(FILENAME_HISTORY).st_size != 0:
             global GlobalVideoIdForRelated
             GlobalVideoIdForRelated = self.MyYouTubeSearcherObj.RelateFromHistoryRecommenderObj.GetRecommendedVideoId()
             if(GlobalVideoIdForRelated!=""):
@@ -1184,7 +1232,7 @@ class MyFrame(wx.Frame):
     def OnChangeIndex(self,evt):
         self.ChangeIndex(self.index_info_edit.GetValue())
     def OnStartHistoryModeThread(self):
-        if os.stat("all_played_videos.txt").st_size > 0:
+        if os.stat(FILENAME_HISTORY).st_size > 0:
             self.HistoryStuffObj.UnsetAllPrepearingsDone()
             self.toolbar.EnableTool(self.APP_HISTORY,False)
             self.smartbtn.Disable()
@@ -1213,10 +1261,10 @@ class MyFrame(wx.Frame):
         t = threading.Thread(target = self.OnStartHistoryModeThread)
         t.start()
     def OnOpenDownloads(self,evt):
-        os.startfile(os.getcwd()+"./downloads")
+        os.startfile(os.getcwd()+"./"+DIRNAME_DOWNLOADS_FOLDER)
     def UnloadRelatedThumbs(self):
         for bitmap in self.sBitMaps:
-            bitmap.SetBitmap(wx.Bitmap("no_small.png",wx.BITMAP_TYPE_ANY))
+            bitmap.SetBitmap(wx.Bitmap(FILENAME_SMALL_NO_THUMBNAIL,wx.BITMAP_TYPE_ANY))
     def RefreshRelatedThumbs(self):
         ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
         i = 0
@@ -1224,7 +1272,7 @@ class MyFrame(wx.Frame):
         for my_id in ids:
             if i > 5:
                 break
-            img_address_local = "./related_images/"+my_id+"-"+str(self.related_thumbnails_current_indexes[i])+".jpg"
+            img_address_local = "./"+DIRNAME_RELATED_IMAGES_FOLDER+"/"+my_id+"-"+str(self.related_thumbnails_current_indexes[i])+".jpg"
             if os.path.isfile(img_address_local):
                 self.sBitMaps[i].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
             i+=1
@@ -1245,7 +1293,7 @@ class MyFrame(wx.Frame):
             k+=1
             if k > 2:
                 k=0
-            img_address_local = "./related_images/"+ids[bitmapId]+"-"+str(k)+".jpg"
+            img_address_local = "./"+DIRNAME_RELATED_IMAGES_FOLDER+"/"+ids[bitmapId]+"-"+str(k)+".jpg"
             self.related_thumbnails_current_indexes[bitmapId] = k
             if os.path.isfile(img_address_local):
                 self.sBitMaps[bitmapId].SetBitmap(wx.Bitmap(img_address_local,wx.BITMAP_TYPE_ANY))
@@ -1328,7 +1376,7 @@ class MyFrame(wx.Frame):
         self.text.SetLabel("No Results!")
         self.statusbar.SetStatusText('Nothing Found...',1)
         self.duration_info.SetLabel("unavailable")
-        self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
+        self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_BIG_NO_THUMBNAIL,wx.BITMAP_TYPE_ANY))
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
         self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
         self.playbtn.Disable()
@@ -1391,7 +1439,7 @@ class MyFrame(wx.Frame):
     def RefreshSongInfo(self):
         global GlobalVideoIdForRelated
         self.UnloadRelatedThumbs()
-        self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
+        self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_BIG_NO_THUMBNAIL,wx.BITMAP_TYPE_ANY))
         if self.HistoryStuffObj.CheckIfInHistoryMode():
             number_of_elements = self.HistoryStuffObj.GetSizeOfHistory()
             current_index = self.HistoryStuffObj.GetIndex()
@@ -1405,7 +1453,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.SaveThumb()
         self.MyYouTubeSearcherObj.LoadStatisticsAndInformation()
         self.MyYouTubeSearcherObj.LoadContentDetails()
-        img_downloaded = self.MyImageToolsObj.ResizeImage("file.jpg",(320,240))
+        img_downloaded = self.MyImageToolsObj.ResizeImage(FILENAME_MAIN_THUMBNAIL_BEFORE_CONVERTION,(320,240))
         self.MyYouTubeSearcherObj.CreateHtmlWithIFrameForCurrentVideo()
         if(GlobalVideoIdForRelated != ""):
             self.main_title_static_text.SetLabel("Related Video")
@@ -1431,13 +1479,13 @@ class MyFrame(wx.Frame):
         self.index_info_edit.SetValue(str(current_index+1))
         self.index_info.SetLabel("/"+str(number_of_elements))
         if(img_downloaded):
-            #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("file.png",150))
+            #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage(FILENAME_MAIN_THUMBNAIL_IMAGE,150))
             #self.panel.Refresh()
-            self.main_image_thumb.SetBitmap(wx.Bitmap("file.png",wx.BITMAP_TYPE_ANY))
+            self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_MAIN_THUMBNAIL_IMAGE,wx.BITMAP_TYPE_ANY))
         else:
-            #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage("no.png",150))
+            #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage(FILENAME_BIG_NO_THUMBNAIL,150))
             #self.panel.Refresh()
-            self.main_image_thumb.SetBitmap(wx.Bitmap("no.png",wx.BITMAP_TYPE_ANY))
+            self.main_image_thumb.SetBitmap(wx.Bitmap(FILENAME_BIG_NO_THUMBNAIL,wx.BITMAP_TYPE_ANY))
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,True)
         self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,True)
         if(self.info_shown):
