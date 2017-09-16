@@ -19,6 +19,18 @@ import Image
 import wx.lib.scrolledpanel
 import win32clipboard
 from win32api import GetSystemMetrics
+import httplib2
+import sys
+from apiclient.discovery import build
+from apiclient.errors import HttpError
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.file import Storage
+from oauth2client.tools import argparser, run_flow
+CLIENT_SECRETS_FILE = "client_secrets.json"
+YOUTUBE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/youtube"
+YOUTUBE_API_SERVICE_NAME = "youtube"
+YOUTUBE_API_VERSION = "v3"
+MISSING_CLIENT_SECRETS_MESSAGE = ""
 
 warnings.filterwarnings('ignore')
 
@@ -28,6 +40,52 @@ GlobalIfNowDownloading = 0
 GlobalLastRenameFileResult = 0
 api_key = #ENTER YOUR API KEY HERE
 
+class MyOAuthManager():
+    def __init__(self,parent):
+        self.parent = parent
+        self.youtube = self.get_authenticated_service()
+        self.history_playlist_id_filename = "history_playlist_id_file.playlistId"
+    def get_authenticated_service(self):
+        argparser.add_argument("--videoid", default="L-oNKK1CrnU", help="ID of video to like.")
+        args = argparser.parse_args()
+        flow = flow_from_clientsecrets(CLIENT_SECRETS_FILE,scope=YOUTUBE_READ_WRITE_SCOPE,message=MISSING_CLIENT_SECRETS_MESSAGE)
+
+        storage = Storage("%s-oauth2.json" % sys.argv[0])
+        credentials = storage.get()
+
+        if credentials is None or credentials.invalid:
+            credentials = run_flow(flow, storage, args)
+
+        return build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,http=credentials.authorize(httplib2.Http()))
+    def CreateHistoryPlaylistIfNotCreated(self):
+        if(not os.path.isfile(self.history_playlist_id_filename)):
+            playlists_insert_response = self.youtube.playlists().insert(
+              part="snippet,status",
+              body=dict(
+                snippet=dict(
+                  title="Youtube manager and download history playlist",
+                  description="A private playlist created with the YouTube API v3"
+                ),
+                status=dict(
+                  privacyStatus="private"
+                )
+              )
+            ).execute()
+
+            history_playlist_id_file = open(self.history_playlist_id_filename,"w")
+            history_playlist_id_file.write(playlists_insert_response["id"])
+            history_playlist_id_file.close()
+    def GetMyHistoryPlaylistId(self):
+        with open(self.history_playlist_id_filename) as f:
+            content = f.readlines()
+        return content[0]
+    def add_video_to_playlist(self,videoID,playlistID):
+        try:
+            add_video_request= self.youtube.playlistItems().insert(part="snippet",body={'snippet': {'playlistId': playlistID,'resourceId': {'kind': 'youtube#video','videoId': videoID}}}).execute()
+        except:
+            self.parent.statusbar.SetStatusText("can't add video to playlist!")
+    def LikeAVideo(self,videoId,like_or_dislike):
+        self.youtube.videos().rate(id=videoId,rating=like_or_dislike).execute()
 def intWithCommas(x):
     if type(x) not in [type(0), type(0L)]:
         raise TypeError("Parameter must be an integer.")
@@ -519,6 +577,7 @@ class HistoryStuff():
         self.in_history_mode = 0
         self.index = 0
         self.if_all_prepearings_done = 0
+        self.syncing_now = 0
     def AllPrepearingsDone(self):
         return self.if_all_prepearings_done
     def SetAllPrepearingsDone(self):
@@ -554,6 +613,7 @@ class HistoryStuff():
             self.history_list = list()
             self.UnsetAllPrepearingsDone()
             self.index = self.GetSizeOfHistory()-1
+            self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST, False)
         else:
             self.parent.prev_page_btn.Disable()
             self.parent.next_page_btn.Disable()
@@ -566,8 +626,40 @@ class HistoryStuff():
             self.parent.current_main_title = "Your History"
             self.index = self.GetSizeOfHistory()-1
             self.parent.RefreshSongInfo()
-
-
+            self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST, True)
+    def WaitSyncToCompleteAndEnableButtons(self):
+        while(1):
+            time.sleep(0.5)
+            if(not self.syncing_now):
+                break
+        self.parent.smartbtn.Enable()
+        self.parent.toolbar.EnableTool(self.parent.APP_CLARIFAI_SEARCH,True)
+        self.parent.toolbar.EnableTool(self.parent.APP_HISTORY,True)
+        self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST,True)
+        self.parent.ShowMessageHistorySynced()
+    def SyncHistoryPlaylist(self,evt):
+        self.parent.smartbtn.Disable()
+        self.parent.toolbar.EnableTool(self.parent.APP_CLARIFAI_SEARCH,False)
+        self.parent.toolbar.EnableTool(self.parent.APP_HISTORY,False)
+        self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST,False)
+        self.parent.MyOAuthManagerObj.CreateHistoryPlaylistIfNotCreated()
+        self.syncing_now = 1
+        sync_thread = threading.Thread(target=self.AddAllHistoryToHistoryPlaylist)
+        sync_thread.start()
+        wait_to_enable_buttons_thread = threading.Thread(target=self.WaitSyncToCompleteAndEnableButtons)
+        wait_to_enable_buttons_thread.start()
+    def AddAllHistoryToHistoryPlaylist(self):
+        size = float(self.GetSizeOfHistory())
+        index = float(0)
+        percent = float(0)
+        for videoId in self.history_list:
+            index += 1
+            if(size/100)>0:
+                percent = index/(size/100)
+            self.parent.statusbar.SetStatusText("["+str(int(percent))+"%"+"] Syncing video with id: "+videoId)
+            self.parent.MyOAuthManagerObj.add_video_to_playlist(videoId,self.parent.MyOAuthManagerObj.GetMyHistoryPlaylistId())
+        self.parent.statusbar.SetStatusText("")
+        self.syncing_now = 0
     def GetIndex(self):
         return self.index
     def IncrementIndex(self):
@@ -607,6 +699,8 @@ class MyFrame(wx.Frame):
     and has a simple menu.
     """
     def __init__(self, parent, title):
+        self.MyOAuthManagerObj = MyOAuthManager(self)
+
         self.IfVideoTrigger = 0
         self.remaining_time_in_seconds_for_timer_data = 0
         self.MyYouTubeSearcherObj = MyYouTubeSearcher(self)
@@ -641,6 +735,7 @@ class MyFrame(wx.Frame):
         self.APP_CLARIFAI_SEARCH = 8
         self.APP_OPEN_DOWNLOADS = 9
         self.APP_ADD_TO_HISTORY = 10
+        self.APP_SYNC_HISTORY_PLAYLIST = 11
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -690,12 +785,15 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.OnOpenDownloads, open_downloads_tool)
         add_to_history_tool = self.toolbar.AddLabelTool(self.APP_ADD_TO_HISTORY, 'Add to history', wx.Bitmap('add_to_history.png'))
         self.Bind(wx.EVT_TOOL, self.AddCurrentVideoToHistory, add_to_history_tool)
+        sync_history_tool = self.toolbar.AddLabelTool(self.APP_SYNC_HISTORY_PLAYLIST, 'Sync history', wx.Bitmap('sync_history.png'))
+        self.Bind(wx.EVT_TOOL, self.HistoryStuffObj.SyncHistoryPlaylist, sync_history_tool)
 
 
 
 
         self.toolbar.Realize()
         self.toolbar.SetBackgroundColour("RGB(220,220,220)")
+        self.toolbar.EnableTool(self.APP_SYNC_HISTORY_PLAYLIST, False)
         # statusbar initialization
         self.statusbar = self.CreateStatusBar(2)
 
@@ -801,6 +899,8 @@ class MyFrame(wx.Frame):
         self.copy_link_btn.Bind(wx.EVT_BUTTON, self.OnCopyLink)
         self.likes_gauge.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverGauge)
         self.likes_gauge.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitLikeDislike)
+        self.like_static_image.Bind(wx.EVT_LEFT_DOWN, self.LikeCurrentVideo)
+        self.dislike_static_image.Bind(wx.EVT_LEFT_DOWN, self.DislikeCurrentVideo)
 
         # GRID OF THUMBNAILS
         for i in range(3):
@@ -871,6 +971,14 @@ class MyFrame(wx.Frame):
         self.index_info_edit.Disable()
 
         self.DrawInterfaceLines()
+    def LikeCurrentVideo(self,evt):
+        self.MyOAuthManagerObj.LikeAVideo(self.MyYouTubeSearcherObj.GetCurrentVideoId(),"like")
+        self.statusbar.SetStatusText("You like this video")
+        return
+    def DislikeCurrentVideo(self,evt):
+        self.MyOAuthManagerObj.LikeAVideo(self.MyYouTubeSearcherObj.GetCurrentVideoId(),"dislike")
+        self.statusbar.SetStatusText("You dislike this video")
+        return
     def RefreshPrevAndNextPageButtons(self):
         if(self.MyYouTubeSearcherObj.pages_tokens[0]==""):
             self.prev_page_btn.Disable()
@@ -1063,22 +1171,25 @@ class MyFrame(wx.Frame):
     def OnChangeIndex(self,evt):
         self.ChangeIndex(self.index_info_edit.GetValue())
     def OnStartHistoryModeThread(self):
-        self.HistoryStuffObj.UnsetAllPrepearingsDone()
-        self.toolbar.EnableTool(self.APP_HISTORY,False)
-        self.smartbtn.Disable()
-        global GlobalVideoIdForRelated
-        GlobalVideoIdForRelated = ""
-        global GlobalIfNowDownloading
-        if(GlobalIfNowDownloading==0):
-            self.playbtn.Enable()
-            self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
-            self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
-        self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
-        self.HistoryStuffObj.EnableDisableHistoryMode(1)
-        self.RefreshPrevAndNextButtons()
-        self.smartbtn.Enable()
-        self.toolbar.EnableTool(self.APP_HISTORY,True)
-        self.HistoryStuffObj.SetAllPrepearingsDone()
+        if os.stat("all_played_videos.txt").st_size > 0:
+            self.HistoryStuffObj.UnsetAllPrepearingsDone()
+            self.toolbar.EnableTool(self.APP_HISTORY,False)
+            self.smartbtn.Disable()
+            self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
+            global GlobalVideoIdForRelated
+            GlobalVideoIdForRelated = ""
+            global GlobalIfNowDownloading
+            if(GlobalIfNowDownloading==0):
+                self.playbtn.Enable()
+                self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
+                self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
+            self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
+            self.HistoryStuffObj.EnableDisableHistoryMode(1)
+            self.RefreshPrevAndNextButtons()
+            self.smartbtn.Enable()
+            self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,True)
+            self.toolbar.EnableTool(self.APP_HISTORY,True)
+            self.HistoryStuffObj.SetAllPrepearingsDone()
     def OnStartHistoryMode(self,evt):
         t = threading.Thread(target = self.OnStartHistoryModeThread)
         t.start()
@@ -1374,11 +1485,15 @@ class MyFrame(wx.Frame):
         dlg = wx.MessageDialog(self.panel,"Video has been saved to your history!", "Video added", wx.OK | wx.ICON_INFORMATION)
         dlg.ShowModal()
         dlg.Destroy()
+    def ShowMessageHistorySynced(self):
+        dlg = wx.MessageDialog(self.panel,"All videos has been synchronised on you youtube history playlist!", "History synchronised successfully!", wx.OK | wx.ICON_INFORMATION)
+        dlg.ShowModal()
+        dlg.Destroy()
     def OnOpenInBrowser(self,event):
-        webbrowser.open_new(url)
+        webbrowser.open_new(self.MyYouTubeSearcherObj.GetWatchUrl())
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyFrame(None, "YouTube Music - David Georiev - v2.70")
+        frame = MyFrame(None, "YouTube Music - David Georiev - v2.90")
         self.SetTopWindow(frame)
         frame.Show(True)
         return True
