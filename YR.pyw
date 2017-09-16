@@ -72,6 +72,7 @@ FILENAME_TRASH_OVERLAY_IMAGE = "GUI_Images\\trash.png"
 FILENAME_SWITCH_ACCOUNT_ICON = "GUI_Images\\log_out_account.png"
 FILENAME_ADD_TO_FAVORITES_ICON = "GUI_Images\\add_to_favorites.png"
 FILENAME_ADD_TO_FAVORITES_EMPTY_ICON = "GUI_Images\\add_to_favorites_empty.png"
+FILENAME_CLEAN_ALL_HISTORY_ICON = "GUI_Images\\clean_all_history_icon.png"
 
 DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
 DIRNAME_DOWNLOADS_FOLDER = "downloads"
@@ -286,6 +287,8 @@ class MyYouTubeSearcher():
         self.MyClarifaiTaggerObj = ClarifayTagger(self)
         self.RelateFromHistoryRecommenderObj = RelateFromHistoryRecommender(self)
         self.pages_tokens = ["",""]
+    def CleanDataInfo(self):
+        self.data_info = dict()
     def CreateHtmlWithIFrameForCurrentVideo(self):
         html_file = open(FILENAME_IFRAME_HTML,"w")
         html_file.write('<iframe width="'+str(GetSystemMetrics(0)/2)+'" height="'+str(GetSystemMetrics(1)/2)+'" src="https://www.youtube.com/embed/'+self.GetCurrentVideoId()+'?rel=0&autoplay=1" frameborder="0" allowfullscreen></iframe>')
@@ -304,6 +307,7 @@ class MyYouTubeSearcher():
     def SetIndex(self,new):
         if(new-1>=0)and(new-1<self.GetNumberOfFoundVideos()):
             self.index = new-1
+
     def GetCurrentVideoId(self):
         global GlobalVideoIdForRelated
         if(GlobalVideoIdForRelated!=""):
@@ -322,7 +326,10 @@ class MyYouTubeSearcher():
     def SetExt(self,param):
         self.ext = param
     def RefreshNumberOfFoundVideos(self):
-        self.number_of_found_videos = len(self.data_info["items"])
+        if "items" in self.data_info:
+            self.number_of_found_videos = len(self.data_info["items"])
+        else:
+            self.number_of_found_videos = 0
     def FilterResults(self,arg_dict):
         only_HD = self.parent.check_show_only_HD.GetValue()
         min_min = self.parent.min_min_edit.GetValue()
@@ -427,7 +434,7 @@ class MyYouTubeSearcher():
         if "prevPageToken" in self.data_info:
             self.pages_tokens[0] = self.data_info["prevPageToken"]
             del self.data_info["prevPageToken"]
-        self.number_of_found_videos = len(self.data_info[u"items"])
+        self.RefreshNumberOfFoundVideos()
         self.parent.statusbar.SetStatusText("",1)
     def LoadStatisticsAndInformation(self):
         self.parent.statusbar.SetStatusText("Requesting for statistics and information...",1)
@@ -634,12 +641,22 @@ class HistoryStuff():
         self.index = 0
         self.if_all_prepearings_done = 0
         self.syncing_now = 0
+    def CleanAllHistory(self):
+        self.history_list = list()
+        self.SetIndex(1)
+        dlg = wx.MessageDialog(None, 'All history will be cleaned.', 'Delete?', wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION )
+        result = dlg.ShowModal()
+        if result == wx.ID_NO:
+            return 0
+        my_file = open(FILENAME_HISTORY,"w")
+        my_file.close()
+        return 1
     def AllPrepearingsDone(self):
         return self.if_all_prepearings_done
     def SetAllPrepearingsDone(self):
-        self. if_all_prepearings_done = 1
+        self.if_all_prepearings_done = 1
     def UnsetAllPrepearingsDone(self):
-        self. if_all_prepearings_done = 0
+        self.if_all_prepearings_done = 0
     def RemoveDuplicates(self):
         reversed_list = self.history_list
         reversed_list.reverse()
@@ -668,9 +685,11 @@ class HistoryStuff():
         if(val == 0):
             self.history_list = list()
             self.UnsetAllPrepearingsDone()
-            self.index = self.GetSizeOfHistory()-1
+            self.SetIndex(0)
             self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST, False)
         else:
+            self.parent.MyYouTubeSearcherObj.CleanDataInfo()
+            self.parent.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
             self.parent.prev_page_btn.Disable()
             self.parent.next_page_btn.Disable()
             self.RemoveDuplicates()
@@ -797,17 +816,23 @@ class MyFrame(wx.Frame):
         self.APP_ADD_TO_HISTORY = 10
         self.APP_SYNC_HISTORY_PLAYLIST = 11
         self.APP_LOG_OUT_ACCOUNT = 12
+        self.APP_CLEAN_ALL_HISTORY = 13
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
         self.fileMenu = wx.Menu()
         self.searchMenu = wx.Menu()
+        self.optionsMenu = wx.Menu()
         # add an item to the menu, using \tKeyName automatically
         # creates an accelerator, the third param is some help text
         # that will show up in the statusbar
         switch_youtube_account_item = wx.MenuItem(self.fileMenu, self.APP_LOG_OUT_ACCOUNT, '&Log out')
         switch_youtube_account_item.SetBitmap(wx.Bitmap(FILENAME_SWITCH_ACCOUNT_ICON))
         self.fileMenu.AppendItem(switch_youtube_account_item)
+
+        clean_all_history_item = wx.MenuItem(self.optionsMenu, self.APP_CLEAN_ALL_HISTORY, '&Clean all history')
+        clean_all_history_item.SetBitmap(wx.Bitmap(FILENAME_CLEAN_ALL_HISTORY_ICON))
+        self.optionsMenu.AppendItem(clean_all_history_item)
 
         self.random_search_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Random search', 'Random search', kind=wx.ITEM_CHECK)
         self.search_for_list_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Search for list', 'Search for list', kind=wx.ITEM_CHECK)
@@ -818,12 +843,12 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnLogOutAccount, id=self.APP_LOG_OUT_ACCOUNT)
         self.Bind(wx.EVT_MENU, self.OnStartHistoryMode, id=self.APP_HISTORY)
         self.Bind(wx.EVT_MENU, self.OnRecommendButtonPressed, id=self.APP_RECOMMEND)
-
+        self.Bind(wx.EVT_MENU, self.OnCleanHistory, id=self.APP_CLEAN_ALL_HISTORY)
 
         # and put the menu on the menubar
         self.menuBar.Append(self.fileMenu, "&File")
         self.menuBar.Append(self.searchMenu, "&Search options")
-
+        self.menuBar.Append(self.optionsMenu, "&Options")
         self.SetMenuBar(self.menuBar)
 
 
@@ -1052,6 +1077,16 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnCleanHistory(self,evt):
+        if self.HistoryStuffObj.CleanAllHistory():
+            self.NothingFoundRefresh()
+            self.main_title_static_text.SetLabel("Nothing in History")
+            self.ShowMessageHistoryCleaned()
+        return
+    def ShowMessageHistoryCleaned(self):
+        dlg = wx.MessageDialog(self.panel,'History cleaned!', "Cleaned", wx.OK | wx.ICON_WARNING)
+        dlg.ShowModal()
+        dlg.Destroy()
     def OnHoverLikeCurrentVideoStaticImage(self,evt):
         if(self.VideoInformationExists()):
             self.like_static_image.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
@@ -1378,11 +1413,12 @@ class MyFrame(wx.Frame):
                     return
 
     def OnHoverThumbnail(self, id):
-        ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
-        if(len(ids)>id):
-            self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(ids[id]))
-            self.related_thumbnail_id_updater_thread = id
-            self.RunRelatedThumbnailsLoopUpdaterThread()
+        if(self.VideoInformationExists()):
+            ids = self.MyYouTubeSearcherObj.GetRelatedIds(None)
+            if(len(ids)>id):
+                self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(ids[id]))
+                self.related_thumbnail_id_updater_thread = id
+                self.RunRelatedThumbnailsLoopUpdaterThread()
     def OnExitThumbnail(self,evt):
         self.related_thumbnail_updater_thread_is_running = 0
         self.statusbar.SetStatusText("")
@@ -1425,7 +1461,6 @@ class MyFrame(wx.Frame):
         self.duration_info.SetLabel("unavailable")
         if(self.random_search_menu_checkbox.IsChecked()):
             self.MyYouTubeSearcherObj.GetRandomWord()
-        self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshPrevAndNextButtons()
         if(self.search_for_list_menu_checkbox.IsChecked()):
             self.MyYouTubeSearcherObj.SearchListPlease(self.search_text.GetValue(),pageToken)
@@ -1439,12 +1474,19 @@ class MyFrame(wx.Frame):
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()==0:
             self.NothingFoundRefresh()
             return None
+        self.MyYouTubeSearcherObj.SetIndex(1)
         self.RefreshSongInfo()
         global GlobalIfNowDownloading
         if(GlobalIfNowDownloading==0):
             self.playbtn.Enable()
             self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
+    def ResetAndDisableIndexFieldAndMaxIndex(self):
+        self.prevbtn.Disable()
+        self.nextbtn.Disable()
+        self.index_info_edit.Disable()
+        self.index_info_edit.SetValue("")
+        self.index_info.SetLabel("")
     def NothingFoundRefresh(self):
         self.UnloadRelatedThumbs()
         self.text.SetLabel("No Results!")
@@ -1454,6 +1496,7 @@ class MyFrame(wx.Frame):
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
         self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
         self.playbtn.Disable()
+        self.ResetAndDisableIndexFieldAndMaxIndex()
         self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
     def StopTimer(self):
