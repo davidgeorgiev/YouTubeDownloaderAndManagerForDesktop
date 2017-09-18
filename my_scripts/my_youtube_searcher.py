@@ -270,6 +270,15 @@ class MyYouTubeSearcher():
         except IOError:
             pass
         self.parent.statusbar.SetStatusText("",1)
+    def SaveThumbParam(self,videoId,filename):
+        self.parent.statusbar.SetStatusText('Fetching some thumbnail...',1)
+        thumb_url = self.GetThumbUrlById(videoId)
+        testfile = urllib.URLopener()
+        try:
+            testfile.retrieve(thumb_url, filename)
+        except IOError:
+            pass
+        self.parent.statusbar.SetStatusText("",1)
     def ClearRelatedThubms(self):
         os.system('del /Q "'+os.getcwd()+'\\'+yr_constants.DIRNAME_RELATED_IMAGES_FOLDER+'\\*"')
     def SaveRelatedThumbs(self):

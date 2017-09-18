@@ -12,6 +12,7 @@ import webbrowser
 import threading
 import global_functions
 import time
+import scrolling_window_videos
 
 class MyFrame(wx.Frame):
     """
@@ -59,6 +60,7 @@ class MyFrame(wx.Frame):
         self.APP_SYNC_HISTORY_PLAYLIST = 11
         self.APP_LOG_OUT_ACCOUNT = 12
         self.APP_CLEAN_ALL_HISTORY = 13
+        self.APP_SCROLLING_WINDOW = 14
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -117,6 +119,8 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.AddCurrentVideoToHistory, add_to_history_tool)
         sync_history_tool = self.toolbar.AddLabelTool(self.APP_SYNC_HISTORY_PLAYLIST, 'Sync history', wx.Bitmap(yr_constants.FILENAME_SYNC_HISTORY_ICON))
         self.Bind(wx.EVT_TOOL, self.HistoryStuffObj.SyncHistoryPlaylist, sync_history_tool)
+        show_scrolling_window_videos = self.toolbar.AddLabelTool(self.APP_SCROLLING_WINDOW, 'Scrolling Window', wx.Bitmap(yr_constants.FILENAME_SCROLLING_WINDOW_ICON))
+        self.Bind(wx.EVT_TOOL, self.OnShowScrollingVideoWindow, show_scrolling_window_videos)
 
 
 
@@ -191,30 +195,14 @@ class MyFrame(wx.Frame):
 
         # GRID OF THUMBNAILS
         self.sBitMaps = list()
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[0].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(0))
-        self.sBitMaps[0].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(0))
-        self.sBitMaps[0].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[1].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(1))
-        self.sBitMaps[1].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(1))
-        self.sBitMaps[1].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[2].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(2))
-        self.sBitMaps[2].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(2))
-        self.sBitMaps[2].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[3].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(3))
-        self.sBitMaps[3].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(3))
-        self.sBitMaps[3].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[4].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(4))
-        self.sBitMaps[4].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(4))
-        self.sBitMaps[4].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
-        self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
-        self.sBitMaps[5].Bind(wx.EVT_LEFT_DOWN, lambda event: self.OnClickThumbnail(5))
-        self.sBitMaps[5].Bind(wx.EVT_ENTER_WINDOW, lambda event: self.OnHoverThumbnail(5))
-        self.sBitMaps[5].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
+        i = 0
+        while(i<=5):
+            self.sBitMaps.append(wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SMALL_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(120, 90)))
+            self.sBitMaps[i].Bind(wx.EVT_LEFT_DOWN, lambda event,index=i: self.OnClickThumbnail(index))
+            self.sBitMaps[i].Bind(wx.EVT_ENTER_WINDOW, lambda event,index=i: self.OnHoverThumbnail(index))
+            self.sBitMaps[i].Bind(wx.EVT_LEAVE_WINDOW, self.OnExitThumbnail)
+            i+=1
+
 
         # bind the button events to handlers
         self.Bind(wx.EVT_BUTTON, self.IfVideo, self.check_mp4_or_mp3)
@@ -319,6 +307,9 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnShowScrollingVideoWindow(self,evt):
+        MyScrollingWindow = scrolling_window_videos.ScrollingWindowVideos(self,self.size_without_info,"Videos")
+        MyScrollingWindow.Show(True)
     def OnCleanHistory(self,evt):
         if self.HistoryStuffObj.CleanAllHistory():
             self.NothingFoundRefresh()
