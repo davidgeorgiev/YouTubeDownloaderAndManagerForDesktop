@@ -347,7 +347,12 @@ class MyFrame(wx.Frame):
         return
     def VideoInformationExists(self):
         if self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()!=0 or my_globals.GlobalVideoIdForRelated!="" or self.HistoryStuffObj.GetSizeOfHistory()!=0:
-            if(len(self.MyYouTubeSearcherObj.full_data_info["items"])>0):
+            try:
+                is_there = (len(self.MyYouTubeSearcherObj.full_data_info["items"])>0)
+            except:
+                print "except"
+                return 0
+            if(is_there):
                 return 1
         return 0
     def OnHoverHeart(self,evt):
