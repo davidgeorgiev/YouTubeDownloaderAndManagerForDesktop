@@ -61,6 +61,7 @@ class MyFrame(wx.Frame):
         self.APP_LOG_OUT_ACCOUNT = 12
         self.APP_CLEAN_ALL_HISTORY = 13
         self.APP_SCROLLING_WINDOW = 14
+        self.APP_PLAY_WITH_SM_PLAYER = 15
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -111,6 +112,8 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.OnShowAndHideInfoTool, show_and_hide_info_tool)
         play_embed_tool = self.toolbar.AddLabelTool(self.APP_PLAY_EMBED, 'Play in IFrame', wx.Bitmap(yr_constants.FILENAME_PLAY_EMBED_ICON))
         self.Bind(wx.EVT_TOOL, self.OnPlayEmbed, play_embed_tool)
+        play_with_sm_player = self.toolbar.AddLabelTool(self.APP_PLAY_WITH_SM_PLAYER, 'Play with SM Player', wx.Bitmap(yr_constants.FILENAME_PLAY_WITH_SM_PLAYER_ICON))
+        self.Bind(wx.EVT_TOOL, self.OnPlayWithSMPlayer, play_with_sm_player)
         clarifai_search_tool = self.toolbar.AddLabelTool(self.APP_CLARIFAI_SEARCH, 'Clarifai search', wx.Bitmap(yr_constants.FILENAME_CLARIFAI_SEARCH_ICON))
         self.Bind(wx.EVT_TOOL, self.OnSearchByThumbnailButton, clarifai_search_tool)
         open_downloads_tool = self.toolbar.AddLabelTool(self.APP_OPEN_DOWNLOADS, 'Open downloads', wx.Bitmap(yr_constants.FILENAME_DOWNLOADS_ICON))
@@ -296,6 +299,7 @@ class MyFrame(wx.Frame):
         # some start GUI configurations
 
         self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.toolbar.EnableTool(self.APP_OPEN_IN_BROWSER,False)
         self.toolbar.EnableTool(self.APP_CLARIFAI_SEARCH,False)
@@ -307,6 +311,13 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnPlayWithSMPlayer(self,evt):
+        t = threading.Thread(target = self.RunSMPlayerWithArgument)
+        t.start()
+    def RunSMPlayerWithArgument(self):
+        videoId = self.GetRealVideoIdAuto()
+        command = "smplayer "+"https://www.youtube.com/watch?v="+videoId
+        os.system(command)
     def OnShowScrollingVideoWindow(self,evt):
         MyScrollingWindow = scrolling_window_videos.ScrollingWindowVideos(self,self.size_without_info,"Videos")
         MyScrollingWindow.Show(True)
@@ -551,6 +562,7 @@ class MyFrame(wx.Frame):
                 self.RefreshSongInfo()
             self.playbtn.Enable()
             self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
+            self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         else:
             self.ShowMessageNoHistory()
@@ -579,6 +591,7 @@ class MyFrame(wx.Frame):
             if(my_globals.GlobalIfNowDownloading==0):
                 self.playbtn.Enable()
                 self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
+                self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,True)
                 self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
             self.HistoryStuffObj.history_list = self.HistoryStuffObj.ReadHistoryFromFile()
             self.HistoryStuffObj.EnableDisableHistoryMode(1)
@@ -704,6 +717,7 @@ class MyFrame(wx.Frame):
         if(my_globals.GlobalIfNowDownloading==0):
             self.playbtn.Enable()
             self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
+            self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
     def ResetAndDisableIndexFieldAndMaxIndex(self):
         self.prevbtn.Disable()
@@ -722,6 +736,7 @@ class MyFrame(wx.Frame):
         self.playbtn.Disable()
         self.ResetAndDisableIndexFieldAndMaxIndex()
         self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,False)
+        self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
     def StopTimer(self):
         self.now_timer_is_running = 0
@@ -868,6 +883,7 @@ class MyFrame(wx.Frame):
         my_globals.GlobalIfNowDownloading = 1
         self.check_auto_play.Disable()
         self.playbtn.Disable()
+        self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,False)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,False)
         self.check_mp4_or_mp3.Disable()
         self.check_hight_quality.Disable()
@@ -875,6 +891,7 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj.DownloadFile()
         self.check_auto_play.Enable()
         self.playbtn.Enable()
+        self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,True)
         self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
         self.check_mp4_or_mp3.Enable()
         self.check_hight_quality.Enable()

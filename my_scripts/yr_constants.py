@@ -4,7 +4,7 @@ YOUTUBE_API_VERSION = "v3"
 MISSING_CLIENT_SECRETS_MESSAGE = ""
 
 
-api_key = #YOUTUBE API HERE
+api_key = #GOOGLE API HERE
 
 CLIENT_SECRETS_FILE = "data_files\\client_secrets.json"
 FILENAME_HISTORY_PLAYLIST = "data_files\\history_playlist_id_file.playlistId"
@@ -38,6 +38,7 @@ FILENAME_ADD_TO_FAVORITES_ICON = "GUI_Images\\add_to_favorites.png"
 FILENAME_ADD_TO_FAVORITES_EMPTY_ICON = "GUI_Images\\add_to_favorites_empty.png"
 FILENAME_CLEAN_ALL_HISTORY_ICON = "GUI_Images\\clean_all_history_icon.png"
 FILENAME_SCROLLING_WINDOW_ICON = "GUI_Images\\scrolling_window_icon.png"
+FILENAME_PLAY_WITH_SM_PLAYER_ICON = "GUI_Images\\play_with_sm_player.png"
 
 DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
 DIRNAME_SCROLLING_WINDOW_THUMBS_FOLDER = "scroll_window_thumbs"
