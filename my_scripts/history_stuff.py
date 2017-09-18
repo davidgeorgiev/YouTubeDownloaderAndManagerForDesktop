@@ -2,6 +2,7 @@ import yr_constants
 import time
 import wx
 import threading
+import os
 
 class HistoryStuff():
     def __init__(self,parent):

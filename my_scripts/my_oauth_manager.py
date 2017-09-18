@@ -7,6 +7,9 @@ from oauth2client.file import Storage
 from oauth2client.tools import argparser, run_flow
 import yr_constants
 import os.path
+import time
+from time import gmtime, strftime
+from datetime import datetime
 
 class MyOAuthManager():
     def __init__(self,parent):
@@ -34,7 +37,7 @@ class MyOAuthManager():
               part="snippet,status",
               body=dict(
                 snippet=dict(
-                  title="History playlist - "+strftime("%Y-%m-%d %H:%M:%S", gmtime()),
+                  title="History playlist - "+str(datetime.now()).split(".")[0],
                   description="Youtube manager and downloader playlist"
                 ),
                 status=dict(
@@ -42,7 +45,6 @@ class MyOAuthManager():
                 )
               )
             ).execute()
-
             history_playlist_id_file = open(self.history_playlist_id_filename,"w")
             history_playlist_id_file.write(playlists_insert_response["id"])
             history_playlist_id_file.close()
