@@ -1,0 +1,42 @@
+YOUTUBE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/youtube"
+YOUTUBE_API_SERVICE_NAME = "youtube"
+YOUTUBE_API_VERSION = "v3"
+MISSING_CLIENT_SECRETS_MESSAGE = ""
+
+
+api_key = #GOOGLE API KEY
+
+CLIENT_SECRETS_FILE = "data_files\\client_secrets.json"
+FILENAME_HISTORY_PLAYLIST = "data_files\\history_playlist_id_file.playlistId"
+FILENAME_HISTORY = "data_files\\all_played_videos.txt"
+FILENAME_AUTHENTICATE_INFO_JSON = "data_files\\oauth2.json"
+FILENAME_IFRAME_HTML = "data_files\\index.html"
+
+FILENAME_NO_SOUND_MP3 = "no sound\\no.mp3"
+FILENAME_NO_SOUND_MP4 = "no sound\\no.mp4"
+
+FILENAME_MERGED_IMAGE = "GUI_Images\\merged.png"
+FILENAME_MAIN_THUMBNAIL_IMAGE = "GUI_Images\\file.png"
+FILENAME_MAIN_THUMBNAIL_BEFORE_CONVERTION = "GUI_Images\\file.jpg"
+FILENAME_DELETE_DOWNLOADS_ICON = "GUI_Images\\delete_downloads.png"
+FILENAME_OPEN_IN_BROWSER_ICON = "GUI_Images\\open_in_browser.png"
+FILENAME_RECOMMEND_ICON = "GUI_Images\\recommend.png"
+FILENAME_HISTORY_ICON = "GUI_Images\\history.png"
+FILENAME_INFO_ICON = "GUI_Images\\info.png"
+FILENAME_PLAY_EMBED_ICON = "GUI_Images\\play_embed.png"
+FILENAME_CLARIFAI_SEARCH_ICON = "GUI_Images\\clarifai_search.png"
+FILENAME_DOWNLOADS_ICON = "GUI_Images\\downloads.png"
+FILENAME_ADD_TO_HISTORY_ICON = "GUI_Images\\add_to_history.png"
+FILENAME_SYNC_HISTORY_ICON = "GUI_Images\\sync_history.png"
+FILENAME_BIG_NO_THUMBNAIL = "GUI_Images\\no.png"
+FILENAME_LIKE_ICON = "GUI_Images\\like.png"
+FILENAME_DISLIKE_ICON = "GUI_Images\\dislike.png"
+FILENAME_SMALL_NO_THUMBNAIL = "GUI_Images\\no_small.png"
+FILENAME_TRASH_OVERLAY_IMAGE = "GUI_Images\\trash.png"
+FILENAME_SWITCH_ACCOUNT_ICON = "GUI_Images\\log_out_account.png"
+FILENAME_ADD_TO_FAVORITES_ICON = "GUI_Images\\add_to_favorites.png"
+FILENAME_ADD_TO_FAVORITES_EMPTY_ICON = "GUI_Images\\add_to_favorites_empty.png"
+FILENAME_CLEAN_ALL_HISTORY_ICON = "GUI_Images\\clean_all_history_icon.png"
+
+DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
+DIRNAME_DOWNLOADS_FOLDER = "downloads"
