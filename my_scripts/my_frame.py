@@ -327,6 +327,7 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+        self.toolbar.EnableTool(self.APP_SCROLLING_WINDOW,False)
     def OnUpdateProgram(self,evt):
         MyAppUpdater = update_app.AppUpdater(None)
         MyAppUpdater.DownloadZip()
