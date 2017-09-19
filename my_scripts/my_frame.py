@@ -15,6 +15,7 @@ import global_functions
 import time
 import scrolling_window_videos
 import api_keys
+import update_app
 
 class MyFrame(wx.Frame):
     """
@@ -68,6 +69,7 @@ class MyFrame(wx.Frame):
         self.APP_CLEAN_ALL_HISTORY = 13
         self.APP_SCROLLING_WINDOW = 14
         self.APP_PLAY_WITH_SM_PLAYER = 15
+        self.APP_UPDATE_PROGRAM = 16
         # Create the menubar
         self.menuBar = wx.MenuBar()
         # and a menu
@@ -84,6 +86,8 @@ class MyFrame(wx.Frame):
         clean_all_history_item = wx.MenuItem(self.optionsMenu, self.APP_CLEAN_ALL_HISTORY, '&Clean all history')
         clean_all_history_item.SetBitmap(wx.Bitmap(yr_constants.FILENAME_CLEAN_ALL_HISTORY_ICON))
         self.optionsMenu.AppendItem(clean_all_history_item)
+        update_program_item = wx.MenuItem(self.optionsMenu, self.APP_UPDATE_PROGRAM, '&Update Program')
+        self.optionsMenu.AppendItem(update_program_item)
 
         self.random_search_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Random search', 'Random search', kind=wx.ITEM_CHECK)
         self.search_for_list_menu_checkbox = self.searchMenu.Append(wx.ID_ANY, 'Search for list', 'Search for list', kind=wx.ITEM_CHECK)
@@ -95,6 +99,7 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnStartHistoryMode, id=self.APP_HISTORY)
         self.Bind(wx.EVT_MENU, self.OnRecommendButtonPressed, id=self.APP_RECOMMEND)
         self.Bind(wx.EVT_MENU, self.OnCleanHistory, id=self.APP_CLEAN_ALL_HISTORY)
+        self.Bind(wx.EVT_MENU, self.OnUpdateProgram, id=self.APP_UPDATE_PROGRAM)
 
         # and put the menu on the menubar
         self.menuBar.Append(self.fileMenu, "&File")
@@ -322,6 +327,12 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnUpdateProgram(self,evt):
+        MyAppUpdater = update_app.AppUpdater(None)
+        MyAppUpdater.DownloadZip()
+        MyAppUpdater.ExtractZip()
+        MyAppUpdater.MoveAndReplace()
+        self.Destroy()
     def OnEnterShareCurrentVideoToFacebook(self,evt):
         if(self.VideoInformationExists()):
             self.share_to_facebook_btn.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
@@ -579,7 +590,7 @@ class MyFrame(wx.Frame):
                 return
             self.RefreshSongInfo()
     def OnHoverMainThumbnail(self,evt):
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and my_globals.GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone() and self.HistoryStuffObj.GetSizeOfHistory()!=0:
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and my_globals.GlobalVideoIdForRelated == "" and self.HistoryStuffObj.AllPrepearingsDone() and self.HistoryStuffObj.GetSizeOfHistory()!=0 and (self.MyYouTubeSearcherObj.GetTitleFromId("")!="Deleted Video"):
             self.main_image_thumb.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
             self.MyImageToolsObj.MergeTwoImagesToMerged(yr_constants.FILENAME_MAIN_THUMBNAIL_IMAGE,yr_constants.FILENAME_TRASH_OVERLAY_IMAGE)
             self.main_image_thumb.SetBitmap(wx.Bitmap(yr_constants.FILENAME_MERGED_IMAGE,wx.BITMAP_TYPE_ANY))
@@ -588,7 +599,7 @@ class MyFrame(wx.Frame):
         if(self.VideoInformationExists()):
             self.statusbar.SetStatusText(self.MyYouTubeSearcherObj.GetTitleFromId(""))
     def OnExitMainThumbnail(self,evt):
-        if self.HistoryStuffObj.CheckIfInHistoryMode() and (self.HistoryStuffObj.GetSizeOfHistory() != 0):
+        if self.HistoryStuffObj.CheckIfInHistoryMode() and (self.HistoryStuffObj.GetSizeOfHistory() != 0) and (self.MyYouTubeSearcherObj.GetTitleFromId("")!="Deleted Video"):
             self.main_image_thumb.SetBitmap(wx.Bitmap(yr_constants.FILENAME_MAIN_THUMBNAIL_IMAGE,wx.BITMAP_TYPE_ANY))
         self.statusbar.SetStatusText("")
     def OnRecommendButtonPressed(self,evt):
@@ -827,6 +838,22 @@ class MyFrame(wx.Frame):
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
         return if_last
+    def OnTheEndOfTheVideos(self):
+        if self.HistoryStuffObj.CheckIfInHistoryMode():
+            if(self.HistoryStuffObj.GetIndex() == self.HistoryStuffObj.GetSizeOfHistory()-1):
+                return 1
+        else:
+            if(self.MyYouTubeSearcherObj.GetIndex() == self.MyYouTubeSearcherObj.GetNumberOfFoundVideos()-1):
+                return 1
+        return 0
+    def OnTheBeginningOfTheVideos(self):
+        if self.HistoryStuffObj.CheckIfInHistoryMode():
+            if(self.HistoryStuffObj.GetIndex() == 0):
+                return 1
+        else:
+            if(self.MyYouTubeSearcherObj.GetIndex() == 0):
+                return 1
+        return 0
     def RefreshSongInfo(self):
         self.UnloadRelatedThumbs()
         self.main_image_thumb.SetBitmap(wx.Bitmap(yr_constants.FILENAME_BIG_NO_THUMBNAIL,wx.BITMAP_TYPE_ANY))
@@ -851,26 +878,34 @@ class MyFrame(wx.Frame):
             self.main_title_static_text.SetLabel(self.current_main_title)
         if(self.MyYouTubeSearcherObj.GetTitleFromId("")=="Deleted Video"):
             if(self.last_nav_button == "next"):
-                self.NextSong("")
+                if not self.OnTheEndOfTheVideos():
+                    self.NextSong("")
+                    return
             elif(self.last_nav_button == "prev"):
-                self.PrevSong("")
-            return
+                if not self.OnTheBeginningOfTheVideos():
+                    self.PrevSong("")
+                    return
+            self.NothingFoundRefresh()
         self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitleFromId(""))
         self.text.Wrap(300)
-        views_count = global_functions.intWithCommas(int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["viewCount"]))
-        spaces_between = 34
-        spaces_between = (spaces_between-len(views_count))/2
-        label_future_text = "Views: "+views_count
-        for i in range(spaces_between):
-            label_future_text += " "
-        label_future_text += self.MyYouTubeSearcherObj.GetPublishedAt()
-        for i in range(spaces_between):
-            label_future_text += " "
-        label_future_text += "["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]"
-        self.duration_info.SetLabel(label_future_text)
-        self.index_info_edit.Enable()
-        self.index_info_edit.SetValue(str(current_index+1))
-        self.index_info.SetLabel("/"+str(number_of_elements))
+        try:
+            views_count = global_functions.intWithCommas(int(self.MyYouTubeSearcherObj.full_data_info["items"][0]["statistics"]["viewCount"]))
+            spaces_between = 34
+            spaces_between = (spaces_between-len(views_count))/2
+            label_future_text = "Views: "+views_count
+            for i in range(spaces_between):
+                label_future_text += " "
+            label_future_text += self.MyYouTubeSearcherObj.GetPublishedAt()
+            for i in range(spaces_between):
+                label_future_text += " "
+            label_future_text += "["+self.MyYouTubeSearcherObj.NormalizeSeconds(self.MyYouTubeSearcherObj.GetDuration())+"]"
+            self.duration_info.SetLabel(label_future_text)
+            self.index_info_edit.Enable()
+            self.index_info_edit.SetValue(str(current_index+1))
+            self.index_info.SetLabel("/"+str(number_of_elements))
+        except:
+            img_downloaded = 0
+            pass
         if(img_downloaded):
             #self.panel.SetBackgroundColour(self.MyImageToolsObj.GetAvgColorOfAnImage(yr_constants.FILENAME_MAIN_THUMBNAIL_IMAGE,150))
             #self.panel.Refresh()

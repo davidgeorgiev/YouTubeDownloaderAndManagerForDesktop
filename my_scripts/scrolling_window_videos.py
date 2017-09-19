@@ -49,7 +49,10 @@ class ScrollingWindowVideos(wx.Frame):
         else:
             video_ids_unformated = self.parent.MyYouTubeSearcherObj.data_info
             for the_id in video_ids_unformated["items"]:
-                video_ids.append(the_id["id"]["videoId"])
+                if "id" in the_id:
+                    video_ids.append(the_id["id"]["videoId"])
+                elif "snippet" in the_id:
+                    video_ids.append(the_id["snippet"]["resourceId"]["videoId"])
         i = self.index_of_last_loaded_video
         while(i!=self.index_of_last_loaded_video+n):
             if(history_mode):
@@ -60,12 +63,18 @@ class ScrollingWindowVideos(wx.Frame):
                 self.load_more_btn.Disable()
                 break
             thumb_name = yr_constants.DIRNAME_SCROLLING_WINDOW_THUMBS_FOLDER+"\\"+str(index_to_choose)
-            self.parent.MyYouTubeSearcherObj.SaveThumbParam(video_ids[index_to_choose],thumb_name+".jpg")
-            self.ImageToolsObj.ResizeImage(thumb_name+".jpg",(self.size[0]/self.number_in_grid,self.size[1]/self.number_in_grid))
+            try:
+                self.parent.MyYouTubeSearcherObj.SaveThumbParam(video_ids[index_to_choose],thumb_name+".jpg")
+                self.ImageToolsObj.ResizeImage(thumb_name+".jpg",(self.size[0]/self.number_in_grid,self.size[1]/self.number_in_grid))
+            except:
+                pass
             video_sizer = wx.BoxSizer(wx.VERTICAL)
             if(i%3==0) or i == self.index_of_last_loaded_video:
                 side_videos_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            BitMap = wx.StaticBitmap(self.panel, -1, wx.Bitmap(thumb_name+".png", wx.BITMAP_TYPE_ANY), size=(self.size[0]/self.number_in_grid, self.size[1]/self.number_in_grid))
+            if os.path.isfile(thumb_name+".png"):
+                BitMap = wx.StaticBitmap(self.panel, -1, wx.Bitmap(thumb_name+".png", wx.BITMAP_TYPE_ANY), size=(self.size[0]/self.number_in_grid, self.size[1]/self.number_in_grid))
+            else:
+                BitMap = wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_MEDIUM_NO_THUMBNAIL, wx.BITMAP_TYPE_ANY), size=(self.size[0]/self.number_in_grid, self.size[1]/self.number_in_grid))
             BitMap.Bind(wx.EVT_LEFT_DOWN, lambda event,index=index_to_choose: self.SetAndClose(event,index))
             SMBitMap = wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_PLAY_WITH_SM_PLAYER_ICON, wx.BITMAP_TYPE_ANY), size=(30,30))
             SMBitMap.Bind(wx.EVT_LEFT_DOWN, lambda event,index=video_ids[index_to_choose]: self.PlayWithSMPlayer(event,index))
