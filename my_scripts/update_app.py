@@ -18,6 +18,8 @@ class AppUpdater():
         for filename in os.listdir(os.getcwd()+"\\my_scripts"):
             if(filename!="api_keys.py"):
                 os.unlink(os.getcwd()+"\\my_scripts\\"+filename)
+        for filename in os.listdir(os.getcwd()+"\\GUI_Images"):
+            os.unlink(os.getcwd()+"\\GUI_Images\\"+filename)
         #if(os.path.isdir(os.getcwd()+"\\my_scripts")):
             #os.rmdir(os.getcwd()+"\\my_scripts")
         if(os.path.isfile("YR.pyw")):
@@ -26,4 +28,6 @@ class AppUpdater():
             os.unlink("README.md")
         for filename in os.listdir(os.getcwd()+"\\master\\YouTubeDownloaderAndManagerForDesktop-master\\my_scripts\\"):
             os.rename(os.getcwd()+"\\master\\YouTubeDownloaderAndManagerForDesktop-master\\my_scripts\\"+filename,os.getcwd()+"\\my_scripts\\"+filename)
+        for filename in os.listdir(os.getcwd()+"\\master\\YouTubeDownloaderAndManagerForDesktop-master\\GUI_Images\\"):
+            os.rename(os.getcwd()+"\\master\\YouTubeDownloaderAndManagerForDesktop-master\\GUI_Images\\"+filename,os.getcwd()+"\\GUI_Images\\"+filename)
         os.rename(os.getcwd()+"\\master\\YouTubeDownloaderAndManagerForDesktop-master\\YR.pyw",os.getcwd()+"\\YR.pyw")
