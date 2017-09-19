@@ -13,7 +13,10 @@ class ImageTools():
             im = Image.open(infile)
             im.thumbnail(size, Image.ANTIALIAS)
             im.save(temp_name, "PNG")
-            os.unlink(infile)
+            try:
+                os.unlink(infile)
+            except:
+                pass
             infile = infile.split(infile.split(".")[-1])[0]+"png"
             if(os.path.isfile(infile)):
                 os.unlink(infile)

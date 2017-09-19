@@ -59,6 +59,7 @@ class HistoryStuff():
             self.SetIndex(0)
             self.parent.toolbar.EnableTool(self.parent.APP_SYNC_HISTORY_PLAYLIST, False)
         else:
+            self.parent.toolbar.EnableTool(self.parent.APP_SCROLLING_WINDOW,True)
             self.parent.MyYouTubeSearcherObj.CleanDataInfo()
             self.parent.MyYouTubeSearcherObj.RefreshNumberOfFoundVideos()
             self.parent.prev_page_btn.Disable()

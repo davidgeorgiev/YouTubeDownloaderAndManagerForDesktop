@@ -764,6 +764,7 @@ class MyFrame(wx.Frame):
         self.RefreshSongInfo()
         if(my_globals.GlobalIfNowDownloading==0):
             self.playbtn.Enable()
+            self.toolbar.EnableTool(self.APP_SCROLLING_WINDOW,True)
             self.toolbar.EnableTool(self.APP_ADD_TO_HISTORY,True)
             self.toolbar.EnableTool(self.APP_PLAY_WITH_SM_PLAYER,True)
             self.toolbar.EnableTool(self.APP_PLAY_EMBED,True)
