@@ -46,6 +46,7 @@ class MyFrame(wx.Frame):
         self.url_link_is_in_clipboard = 0
         self.copy_checker_btn_thread_is_running = 0
         self.copy_checker_btn_thread_stopped = 1
+        self.last_nav_button = "next"
 
         wx.Frame.__init__(self, parent, -1, title, pos=(150, 150), size=self.size_without_info,style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER ^ wx.MAXIMIZE_BOX)
 
@@ -381,7 +382,6 @@ class MyFrame(wx.Frame):
             try:
                 is_there = (len(self.MyYouTubeSearcherObj.full_data_info["items"])>0)
             except:
-                print "except"
                 return 0
             if(is_there):
                 return 1
@@ -801,6 +801,7 @@ class MyFrame(wx.Frame):
         else:
             self.nextbtn.Enable()
     def PrevSong(self, evt):
+        self.last_nav_button = "prev"
         if self.HistoryStuffObj.CheckIfInHistoryMode():
             self.HistoryStuffObj.DecrementIndex()
         else:
@@ -817,6 +818,7 @@ class MyFrame(wx.Frame):
         self.RefreshSongInfo()
         self.RefreshPrevAndNextButtons()
     def NextSong(self, evt):
+        self.last_nav_button = "next"
         if self.HistoryStuffObj.CheckIfInHistoryMode():
             if_last = self.HistoryStuffObj.IncrementIndex()
         else:
@@ -848,7 +850,10 @@ class MyFrame(wx.Frame):
         else:
             self.main_title_static_text.SetLabel(self.current_main_title)
         if(self.MyYouTubeSearcherObj.GetTitleFromId("")=="Deleted Video"):
-            self.NextSong("")
+            if(self.last_nav_button == "next"):
+                self.NextSong("")
+            elif(self.last_nav_button == "prev"):
+                self.PrevSong("")
             return
         self.text.SetLabel(self.MyYouTubeSearcherObj.GetTitleFromId(""))
         self.text.Wrap(300)
