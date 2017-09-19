@@ -1,5 +1,6 @@
 import my_oauth_manager
 import my_youtube_searcher
+import fb_oauth_manager
 import history_stuff
 import image_tools
 import my_globals
@@ -13,6 +14,7 @@ import threading
 import global_functions
 import time
 import scrolling_window_videos
+import api_keys
 
 class MyFrame(wx.Frame):
     """
@@ -24,6 +26,9 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj = my_youtube_searcher.MyYouTubeSearcher(self)
         self.HistoryStuffObj = history_stuff.HistoryStuff(self)
         self.MyImageToolsObj = image_tools.ImageTools(self)
+        self.MyFaceBookManager = fb_oauth_manager.FacebookOAuthManager(self,api_keys.FACEBOOK_APP_ID,api_keys.FACEBOOK_APP_SECRET,api_keys.FACEBOOK_SHORT_ACCESS_TOOKEN,yr_constants.FILENAME_NEVER_EXPIRING_FACEBOOK_USER_TOOKEN)
+        self.MyFaceBookManager.ExtendUserTooken()
+        self.MyFaceBookManager.InitFacebookGraphWithExtendedTooken()
 
         self.IfVideoTrigger = 0
         self.remaining_time_in_seconds_for_timer_data = 0
@@ -194,6 +199,7 @@ class MyFrame(wx.Frame):
         self.dislike_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_DISLIKE_ICON, wx.BITMAP_TYPE_ANY), size=(30, 27))
         self.copy_link_btn = wx.Button(self.panel, -1, "Copy link")
         self.subscribe_btn = wx.Button(self.panel, -1, "Subscribe")
+        self.share_to_facebook_btn = wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_SHARE_TO_FACEBOOK_ICON, wx.BITMAP_TYPE_ANY), size=(69, 25))
         self.add_to_favorites_static_image = wx.StaticBitmap(self.panel, -1, wx.Bitmap(yr_constants.FILENAME_ADD_TO_FAVORITES_EMPTY_ICON, wx.BITMAP_TYPE_ANY), size=(50, 50))
 
         # GRID OF THUMBNAILS
@@ -231,6 +237,9 @@ class MyFrame(wx.Frame):
         self.like_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitLikeCurrentVideoStaticImage)
         self.dislike_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitDislikeCurrentVideoStaticImage)
         self.subscribe_btn.Bind(wx.EVT_LEFT_DOWN, self.SubscribeCurrentChannel)
+        self.share_to_facebook_btn.Bind(wx.EVT_LEFT_DOWN, self.OnShareCurrentVideoToFacebook)
+        self.share_to_facebook_btn.Bind(wx.EVT_ENTER_WINDOW, self.OnEnterShareCurrentVideoToFacebook)
+        self.share_to_facebook_btn.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitShareCurrentVideoToFacebook)
         self.add_to_favorites_static_image.Bind(wx.EVT_LEFT_DOWN, self.OnClickHeart)
         self.add_to_favorites_static_image.Bind(wx.EVT_ENTER_WINDOW, self.OnHoverHeart)
         self.add_to_favorites_static_image.Bind(wx.EVT_LEAVE_WINDOW, self.OnExitHeart)
@@ -252,6 +261,7 @@ class MyFrame(wx.Frame):
         self.full_info_sizer_subsizer_2.Add(self.likes_gauge, 0, wx.LEFT, 0)
         self.full_info_sizer_subsizer_2.Add(self.dislike_static_image, 0, wx.LEFT, 0)
         self.full_info_sizer_subsizer_3.Add(self.subscribe_btn, 0, wx.LEFT, 62)
+        self.full_info_sizer_subsizer_3.Add(self.share_to_facebook_btn, 0, wx.LEFT, 42)
         self.filter_sizer.Add(self.check_show_only_HD,flag=wx.ALIGN_CENTER | wx.ALL | wx.EXPAND,border=5)
         self.full_info_sizer.Add(self.full_info_sizer_subsizer_2, 0, wx.TOP, 0)
         self.full_info_sizer.Add(self.full_info_sizer_subsizer_3, 0, wx.TOP, 10)
@@ -311,6 +321,27 @@ class MyFrame(wx.Frame):
         self.prev_page_btn.Disable()
         self.next_page_btn.Disable()
         self.DrawInterfaceLines()
+    def OnEnterShareCurrentVideoToFacebook(self,evt):
+        if(self.VideoInformationExists()):
+            self.share_to_facebook_btn.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            self.share_to_facebook_btn.SetBitmap(wx.Bitmap(yr_constants.FILENAME_SHARE_TO_FACEBOOK_HOVER_ICON,wx.BITMAP_TYPE_ANY))
+        return
+    def OnExitShareCurrentVideoToFacebook(self,evt):
+        self.share_to_facebook_btn.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        self.share_to_facebook_btn.SetBitmap(wx.Bitmap(yr_constants.FILENAME_SHARE_TO_FACEBOOK_ICON,wx.BITMAP_TYPE_ANY))
+        return
+    def OnShareCurrentVideoToFacebook(self,evt):
+        videoId = self.GetRealVideoIdAuto()
+        videoUrl = "https://www.youtube.com/watch?v="+videoId
+        if(self.VideoInformationExists()):
+            dlg = wx.TextEntryDialog(self, 'Type something about this video','Post to Facebook')
+            if dlg.ShowModal() == wx.ID_OK:
+                if self.MyFaceBookManager.MakeAPost(dlg.GetValue(),videoUrl):
+                    dlg2 = wx.MessageDialog(self,'"'+self.MyYouTubeSearcherObj.GetTitleFromId("")+'" is posted on Facebook!', "Posted", wx.OK | wx.ICON_WARNING)
+                    dlg2.ShowModal()
+                    dlg2.Destroy()
+            dlg.Destroy()
+        return
     def OnPlayWithSMPlayer(self,evt):
         t = threading.Thread(target = self.RunSMPlayerWithArgument)
         t.start()

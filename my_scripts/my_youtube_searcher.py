@@ -16,6 +16,7 @@ import os.path
 import wx
 import webbrowser
 import threading
+import api_keys
 
 class MyYouTubeSearcher():
     def __init__(self,parent):
@@ -103,7 +104,7 @@ class MyYouTubeSearcher():
             if(size!=0):
                 percent = counter/(size/100)
             self.parent.statusbar.SetStatusText("Filtering: "+str(int(percent))+"%",1)
-            url = "https://www.googleapis.com/youtube/v3/videos?id="+videoId+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+yr_constants.api_key
+            url = "https://www.googleapis.com/youtube/v3/videos?id="+videoId+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+api_keys.google_api_key
             content = urllib2.urlopen(url).read()
             contents = json.loads(content)
             if(len(contents["items"])>0):
@@ -138,7 +139,7 @@ class MyYouTubeSearcher():
         query = query.replace(' ', '+')
         self.data_info = dict()
         self.found_ids = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?"+pageToken+"part=id&q="+query+"&maxResults=30&type=video&fields=prevPageToken,nextPageToken,items(id(videoId))&key="+yr_constants.api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?"+pageToken+"part=id&q="+query+"&maxResults=30&type=video&fields=prevPageToken,nextPageToken,items(id(videoId))&key="+api_keys.google_api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
@@ -160,13 +161,13 @@ class MyYouTubeSearcher():
         self.data_info = dict()
         self.found_ids = dict()
         found_lists_info = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet,id&kind=playlist&q="+query+"&maxResults=1&type=playlist&fields=items(id(playlistId),snippet(title))&key="+yr_constants.api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet,id&kind=playlist&q="+query+"&maxResults=1&type=playlist&fields=items(id(playlistId),snippet(title))&key="+api_keys.google_api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         found_lists_info = json.loads(content)
         playlistId = found_lists_info["items"][0]["id"]["playlistId"]
         self.parent.current_main_title = "List: "+found_lists_info["items"][0]["snippet"]["title"]
-        my_url = "https://www.googleapis.com/youtube/v3/playlistItems?"+pageToken+"part=snippet&maxResults=30&playlistId="+playlistId+"&fields=prevPageToken,nextPageToken,items(snippet(resourceId(videoId)))&key="+yr_constants.api_key
+        my_url = "https://www.googleapis.com/youtube/v3/playlistItems?"+pageToken+"part=snippet&maxResults=30&playlistId="+playlistId+"&fields=prevPageToken,nextPageToken,items(snippet(resourceId(videoId)))&key="+api_keys.google_api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.data_info = json.loads(content)
@@ -182,7 +183,7 @@ class MyYouTubeSearcher():
     def LoadStatisticsAndInformation(self):
         self.parent.statusbar.SetStatusText("Requesting for statistics and information...",1)
         self.full_data_info = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+yr_constants.api_key+"&fields=items(id,snippet(publishedAt,channelId,title,description,categoryId),statistics)&part=snippet,statistics"
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&key="+api_keys.google_api_key+"&fields=items(id,snippet(publishedAt,channelId,title,description,categoryId),statistics)&part=snippet,statistics"
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.full_data_info = json.loads(content)
@@ -190,7 +191,7 @@ class MyYouTubeSearcher():
     def LoadContentDetails(self):
         self.parent.statusbar.SetStatusText("Loading content details...",1)
         self.content_details = dict()
-        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+yr_constants.api_key
+        my_url = "https://www.googleapis.com/youtube/v3/videos?id="+self.GetCurrentVideoId()+"&part=contentDetails&fields=items(contentDetails(duration,definition))&key="+api_keys.google_api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         self.content_details = json.loads(content)
@@ -201,7 +202,7 @@ class MyYouTubeSearcher():
         else:
             max_results = "6"
         self.parent.statusbar.SetStatusText("Requesting related videos dictionary...",1)
-        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults="+max_results+"&type=video&fields=items(id(videoId))&key="+yr_constants.api_key
+        my_url = "https://www.googleapis.com/youtube/v3/search?part=snippet&relatedToVideoId="+videoId+"&maxResults="+max_results+"&type=video&fields=items(id(videoId))&key="+api_keys.google_api_key
         #webbrowser.open_new(my_url)
         content = urllib2.urlopen(my_url).read()
         return json.loads(content)
@@ -242,7 +243,7 @@ class MyYouTubeSearcher():
         if id=="":
             id = self.GetCurrentVideoId()
         info = dict()
-        url = 'https://www.googleapis.com/youtube/v3/videos?id='+id+'&key='+yr_constants.api_key+'&fields=items(snippet(title))&part=snippet'
+        url = 'https://www.googleapis.com/youtube/v3/videos?id='+id+'&key='+api_keys.google_api_key+'&fields=items(snippet(title))&part=snippet'
         content = urllib2.urlopen(url).read()
         info = json.loads(content)
         self.parent.statusbar.SetStatusText("",1)

@@ -3,14 +3,12 @@ YOUTUBE_API_SERVICE_NAME = "youtube"
 YOUTUBE_API_VERSION = "v3"
 MISSING_CLIENT_SECRETS_MESSAGE = ""
 
-
-api_key = #GOOGLE API HERE
-
 CLIENT_SECRETS_FILE = "data_files\\client_secrets.json"
 FILENAME_HISTORY_PLAYLIST = "data_files\\history_playlist_id_file.playlistId"
 FILENAME_HISTORY = "data_files\\all_played_videos.txt"
 FILENAME_AUTHENTICATE_INFO_JSON = "data_files\\oauth2.json"
 FILENAME_IFRAME_HTML = "data_files\\index.html"
+FILENAME_NEVER_EXPIRING_FACEBOOK_USER_TOOKEN = "data_files\\never_expiring_facebook_user_tooken.tooken"
 
 FILENAME_NO_SOUND_MP3 = "no sound\\no.mp3"
 FILENAME_NO_SOUND_MP4 = "no sound\\no.mp4"
@@ -39,6 +37,8 @@ FILENAME_ADD_TO_FAVORITES_EMPTY_ICON = "GUI_Images\\add_to_favorites_empty.png"
 FILENAME_CLEAN_ALL_HISTORY_ICON = "GUI_Images\\clean_all_history_icon.png"
 FILENAME_SCROLLING_WINDOW_ICON = "GUI_Images\\scrolling_window_icon.png"
 FILENAME_PLAY_WITH_SM_PLAYER_ICON = "GUI_Images\\play_with_sm_player.png"
+FILENAME_SHARE_TO_FACEBOOK_ICON = "GUI_Images\\share_to_facebook.png"
+FILENAME_SHARE_TO_FACEBOOK_HOVER_ICON = "GUI_Images\\share_to_facebook_hover.png"
 
 DIRNAME_RELATED_IMAGES_FOLDER = "related_images"
 DIRNAME_SCROLLING_WINDOW_THUMBS_FOLDER = "scroll_window_thumbs"
