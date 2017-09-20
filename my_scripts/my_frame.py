@@ -1,6 +1,6 @@
 import my_oauth_manager
 import my_youtube_searcher
-import fb_oauth_manager
+#import fb_oauth_manager
 import history_stuff
 import image_tools
 import my_globals
@@ -27,9 +27,9 @@ class MyFrame(wx.Frame):
         self.MyYouTubeSearcherObj = my_youtube_searcher.MyYouTubeSearcher(self)
         self.HistoryStuffObj = history_stuff.HistoryStuff(self)
         self.MyImageToolsObj = image_tools.ImageTools(self)
-        self.MyFaceBookManager = fb_oauth_manager.FacebookOAuthManager(self,api_keys.FACEBOOK_APP_ID,api_keys.FACEBOOK_APP_SECRET,api_keys.FACEBOOK_SHORT_ACCESS_TOOKEN,yr_constants.FILENAME_NEVER_EXPIRING_FACEBOOK_USER_TOOKEN)
-        self.MyFaceBookManager.ExtendUserTooken()
-        self.MyFaceBookManager.InitFacebookGraphWithExtendedTooken()
+        #self.MyFaceBookManager = fb_oauth_manager.FacebookOAuthManager(self,api_keys.FACEBOOK_APP_ID,api_keys.FACEBOOK_APP_SECRET,api_keys.FACEBOOK_SHORT_ACCESS_TOOKEN,yr_constants.FILENAME_NEVER_EXPIRING_FACEBOOK_USER_TOOKEN)
+        #self.MyFaceBookManager.ExtendUserTooken()
+        #self.MyFaceBookManager.InitFacebookGraphWithExtendedTooken()
 
         self.IfVideoTrigger = 0
         self.remaining_time_in_seconds_for_timer_data = 0
@@ -345,8 +345,11 @@ class MyFrame(wx.Frame):
         return
     def OnShareCurrentVideoToFacebook(self,evt):
         videoId = self.GetRealVideoIdAuto()
-        videoUrl = "https://www.youtube.com/watch?v="+videoId
         if(self.VideoInformationExists()):
+            webbrowser.open_new("https://www.facebook.com/dialog/share?app_id=87741124305&href=https%3A//www.youtube.com/watch%3Fv%3D"+videoId+"%26feature%3Dshare&display=popup&redirect_uri=https://www.youtube.com/facebook_redirect")
+
+        '''
+            videoUrl = "https://www.youtube.com/watch?v="+videoId
             dlg = wx.TextEntryDialog(self, 'Type something about this video','Post to Facebook')
             if dlg.ShowModal() == wx.ID_OK:
                 if self.MyFaceBookManager.MakeAPost(dlg.GetValue(),videoUrl):
@@ -354,6 +357,8 @@ class MyFrame(wx.Frame):
                     dlg2.ShowModal()
                     dlg2.Destroy()
             dlg.Destroy()
+        '''
+
         return
     def OnPlayWithSMPlayer(self,evt):
         t = threading.Thread(target = self.RunSMPlayerWithArgument)
