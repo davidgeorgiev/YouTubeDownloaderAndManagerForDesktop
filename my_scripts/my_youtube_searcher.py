@@ -281,7 +281,8 @@ class MyYouTubeSearcher():
             pass
         self.parent.statusbar.SetStatusText("",1)
     def ClearRelatedThubms(self):
-        os.system('del /Q "'+os.getcwd()+'\\'+yr_constants.DIRNAME_RELATED_IMAGES_FOLDER+'\\*"')
+        for filename in os.listdir(os.getcwd()+'\\'+yr_constants.DIRNAME_RELATED_IMAGES_FOLDER):
+            os.unlink(os.getcwd()+'\\'+yr_constants.DIRNAME_RELATED_IMAGES_FOLDER+"\\"+filename)
     def SaveRelatedThumbs(self):
         self.ClearRelatedThubms()
         self.parent.statusbar.SetStatusText('Fetching related thumbs...',1)
@@ -320,7 +321,10 @@ class MyYouTubeSearcher():
             else:
                 hight_quality_parameters = '-f "best[height<500]"'
             format_parameters = "--merge-output-format mp4"
-        os.system('del '+'"'+yr_constants.DIRNAME_DOWNLOADS_FOLDER+'\\'+self.temp_future_filename+'"')
+        try:
+            os.unlink(os.getcwd+"\\"+yr_constants.DIRNAME_DOWNLOADS_FOLDER+'\\'+self.temp_future_filename)
+        except:
+            pass
         command = 'youtubedl\\youtubedl.exe "'+self.GetWatchUrl()+'" '+hight_quality_parameters+' '+format_parameters+' -o "./'+yr_constants.DIRNAME_DOWNLOADS_FOLDER+'/temp.'+'%'+'(ext)s"'
         self.parent.HistoryStuffObj.AppendToHistoryFile(self.GetWatchUrl())
         os.system(command)
@@ -350,7 +354,8 @@ class MyYouTubeSearcher():
         self.parent.statusbar.SetStatusText('Deleting all downloads...',1)
         self.StopMusic()
         time.sleep(2)
-        os.system('del /Q "'+os.getcwd()+'\\'+yr_constants.DIRNAME_DOWNLOADS_FOLDER+'\\*"')
+        for filename in os.listdir(os.getcwd()+'\\'+yr_constants.DIRNAME_DOWNLOADS_FOLDER):
+            os.unlink(os.getcwd()+'\\'+yr_constants.DIRNAME_DOWNLOADS_FOLDER+"\\"+filename)
         self.parent.statusbar.SetStatusText("",1)
     def ShowMessageCantBeDownload(self):
         dlg = wx.MessageDialog(self.parent.panel,"The format you want is unavailable! \nPlease change the quality or format and try again.", "Download warning!", wx.OK | wx.ICON_WARNING)
